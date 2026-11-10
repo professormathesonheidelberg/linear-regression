@@ -1,0 +1,1844 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Regression Lab</title>
+<meta name="description" content="Type data for two or more variables and get a scatterplot, the least-squares line, its equation, r, and a bar graph of the residuals.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23DAE3E3'/%3E%3Cpath d='M5 25 27 7' stroke='%23B4561F' stroke-width='2.5' stroke-linecap='round'/%3E%3Ccircle cx='9' cy='17' r='3' fill='%232B6A9E'/%3E%3Ccircle cx='16' cy='20' r='3' fill='%232B6A9E'/%3E%3Ccircle cx='23' cy='8' r='3' fill='%232B6A9E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Sorts+Mill+Goudy:ital@0;1&display=swap">
+<style>
+/* Layout borrowed from the course slides: a grey-green panel on the left, a white field on the right. */
+:root {
+  --field: #FBFCFB;
+  --panel: #DAE3E3;
+  --ink: #1D2428;
+  --muted: #4A5860;
+  --rule: #B8C6C9;
+  --grid: #E2E9E9;
+  --axis: #8A979C;
+  --data: #2B6A9E;   /* the points */
+  --line: #B4561F;   /* the regression line, the errors, and the 2 SD lines */
+  --bad: #A3242A;
+  --wash: rgba(43, 106, 158, 0.09);
+  --tip-bg: #1D2428;
+  --tip-ink: #FBFCFB;
+  --serif: 'Sorts Mill Goudy', 'Goudy Old Style', Georgia, 'Times New Roman', serif;
+  --sans: 'Nunito Sans', 'Avenir Next', 'Segoe UI', Verdana, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --field: #172024;
+    --panel: #1E292D;
+    --ink: #E5ECEC;
+    --muted: #A9B7BA;
+    --rule: #36474D;
+    --grid: #24313A;
+    --axis: #6E8086;
+    --data: #5598D4;
+    --line: #CE7B45;
+    --bad: #F0888C;
+    --wash: rgba(85, 152, 212, 0.14);
+    --tip-bg: #E5ECEC;
+    --tip-ink: #172024;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--field); color: var(--ink); font: 15px/1.45 var(--sans); }
+i { font-family: var(--serif); }
+:focus-visible { outline: 3px solid var(--data); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.layout { display: grid; grid-template-columns: minmax(360px, 430px) minmax(0, 1fr); min-height: 100vh; }
+
+/* ---------- the data panel ---------- */
+.panel { background: var(--panel); padding: 22px 22px 16px; display: flex; flex-direction: column; gap: 12px;
+  position: sticky; top: 0; height: 100vh; height: 100dvh; overflow: auto; }
+h1 { font-family: var(--serif); font-weight: 400; font-size: 2.45rem; line-height: 1.05; margin: 0; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 44ch; }
+.lede i { font-size: 1.08em; }
+.pick { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 10px; }
+.lbl { font-weight: 700; font-size: 0.9rem; }
+select { font: inherit; color: var(--ink); background-color: var(--field); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 8px; min-width: 0; max-width: 100%; }
+.source { grid-column: 1 / -1; margin: 0; font-size: 0.82rem; color: var(--muted); }
+
+.tablebox { flex: 1 1 auto; min-height: 190px; overflow: auto; background: var(--field); border: 1px solid var(--rule); border-radius: 10px;
+  scroll-padding: 46px 0 8px 36px; }
+.grid { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
+.grid thead th { position: sticky; top: 0; z-index: 2; background: var(--field); border-bottom: 1px solid var(--rule); padding: 0; }
+.grid .num { position: sticky; left: 0; z-index: 1; width: 34px; min-width: 34px; padding: 0 6px 0 4px; background: var(--field); color: var(--muted);
+  font-weight: 400; font-size: 0.8rem; text-align: right; border-bottom: 1px solid var(--grid); }
+.grid thead .num { z-index: 3; border-bottom-color: var(--rule); }
+.grid td { padding: 0; border-bottom: 1px solid var(--grid); border-left: 1px solid var(--grid); }
+.grid thead .var { border-left: 1px solid var(--grid); text-align: left; }
+.grid.many .var { min-width: 176px; }
+.varhead { display: flex; align-items: center; gap: 2px; padding-left: 8px; }
+.role { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 1.25rem; line-height: 1; flex: none; padding-right: 2px; }
+.role:empty { display: none; }
+.name { flex: 1 1 auto; min-width: 0; width: 100%; font: inherit; font-weight: 700; font-size: 0.86rem; color: var(--ink); background: transparent; border: 0; padding: 9px 4px; border-radius: 4px; text-overflow: ellipsis; }
+.cell { display: block; width: 100%; min-width: 76px; font: inherit; color: var(--ink); background: transparent; border: 0; border-radius: 0; padding: 5px 10px; text-align: right; }
+.name:focus, .cell:focus { outline: 2px solid var(--data); outline-offset: -2px; background: var(--wash); }
+.grid td.unused .cell { color: var(--muted); }
+.grid tr.active .num { color: var(--ink); font-weight: 700; }
+.cell.bad { outline: 2px solid var(--bad); outline-offset: -2px; color: var(--bad); }
+.rm { flex: none; width: 24px; height: 24px; padding: 0; margin-right: 3px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.rm:hover { background: var(--wash); color: var(--ink); }
+@media (hover: hover) {   /* with a mouse, the remove button appears on hover, which leaves the full width for the name */
+  .rm { position: absolute; right: 0; top: 50%; transform: translateY(-50%); opacity: 0; background: var(--field); }
+  .var:hover .rm, .var:focus-within .rm { opacity: 1; }
+  .many .var:focus-within .name { padding-right: 28px; }
+}
+
+.hint, .foot { margin: 0; font-size: 0.82rem; color: var(--muted); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button.act { font: inherit; font-weight: 700; font-size: 0.9rem; color: var(--ink); background: var(--field); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button.act:hover { border-color: var(--axis); }
+.status { margin: 0; font-size: 0.9rem; font-weight: 600; min-height: 1.3em; }
+.status .warn { display: block; color: var(--bad); font-weight: 600; }
+.status .undo { font: inherit; font-weight: 700; color: var(--data); background: none; border: 0; padding: 0 0 0 6px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+@media (prefers-color-scheme: dark) { .status .undo { color: #8DBDE6; } }
+
+/* ---------- the result ---------- */
+.stage { padding: 20px clamp(18px, 3vw, 44px) 36px; min-width: 0; max-width: 1200px; width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.readout { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 36px; }
+.eq, .r { margin: 0; font-family: var(--serif); font-size: clamp(2rem, 3.5vw, 3.1rem); line-height: 1.12; font-variant-numeric: lining-nums; }
+.eq.empty, .r.empty { color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.vars { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-width: 0; }
+.var-pick { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.var-pick label { white-space: nowrap; }
+.var-pick label i { font-size: 1.3rem; font-weight: 400; }
+.var-pick select { width: 190px; }
+.show { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-left: auto; }
+.check { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; font-weight: 600; white-space: nowrap; }
+.check input { width: 18px; height: 18px; margin: 0; accent-color: var(--line); }
+.check.off { opacity: 0.5; cursor: default; }
+.check svg { display: block; }
+.note { margin: 0; color: var(--muted); max-width: 72ch; }
+.note:empty { display: none; }
+
+.plotwrap { position: relative; }
+.plotwrap svg.plot { display: block; width: 100%; height: auto; }
+.plot text { font-family: var(--sans); }
+.gl { stroke: var(--grid); stroke-width: 1; }
+.ax { stroke: var(--axis); stroke-width: 1; fill: none; }
+.tk { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.at { fill: var(--ink); font-size: 13px; font-weight: 700; }
+.reg { stroke: var(--line); stroke-width: 2.5; stroke-linecap: round; }
+.err { stroke: var(--line); stroke-width: 1.5; stroke-opacity: 0.55; }
+.dense .err { stroke-width: 1; stroke-opacity: 0.35; }
+.band { stroke: var(--line); stroke-width: 1.75; stroke-dasharray: 8 6; }
+.bl { fill: var(--ink); font-size: 12px; font-weight: 700; paint-order: stroke; stroke: var(--field); stroke-width: 3px; stroke-linejoin: round; }
+.pt { fill: var(--data); stroke: var(--field); stroke-width: 1.5; }
+.dense .pt { fill-opacity: 0.72; stroke-width: 0.8; }
+.ring { fill: none; stroke: var(--ink); stroke-width: 2; pointer-events: none; }
+.msg { fill: var(--muted); font-size: 16px; text-anchor: middle; }
+.tip { position: absolute; z-index: 5; pointer-events: none; background: var(--tip-bg); color: var(--tip-ink); font-size: 0.84rem; line-height: 1.35; padding: 6px 9px; border-radius: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tip .k { opacity: 0.75; }
+.tip .v { font-weight: 700; }
+
+.captions { display: flex; flex-direction: column; gap: 3px; }
+.captions p { margin: 0; font-size: 0.92rem; color: var(--muted); }
+.more summary { cursor: pointer; font-weight: 600; font-size: 0.92rem; color: var(--muted); width: fit-content; }
+.more table { border-collapse: collapse; margin-top: 6px; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.more th { text-align: left; font-weight: 400; color: var(--muted); padding: 2px 22px 2px 0; }
+.more td { text-align: right; font-weight: 600; padding: 2px 0; }
+
+/* ---------- the residual graph ---------- */
+.resid { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.resid[hidden] { display: none; }
+.resid-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 18px; }
+.resid-head h2 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(1.7rem, 2.6vw, 2.2rem); line-height: 1.1; }
+.resid-what { margin: 0; color: var(--muted); max-width: 72ch; }
+.bar { fill: var(--line); fill-opacity: 0.72; }
+.zero { stroke: var(--line); stroke-width: 2.5; stroke-linecap: round; }
+.barring { fill: none; stroke: var(--ink); stroke-width: 2; pointer-events: none; }
+.check .icon-bar { fill: var(--line); fill-opacity: 0.72; }
+.check .icon-zero { stroke: var(--line); stroke-width: 1.5; }
+.more table.rtable { border-collapse: collapse; }
+.more .rtable th, .more .rtable td { text-align: right; padding: 2px 0 2px 18px; }
+.more .rtable th { font-weight: 700; color: var(--ink); border-bottom: 1px solid var(--rule); }
+.more .rtable td { font-weight: 400; }
+.more .rtable td:last-child { font-weight: 700; }
+.more .rtable th:first-child, .more .rtable td:first-child { padding-left: 0; color: var(--muted); }
+.rnote { margin: 6px 0 0; font-size: 0.85rem; color: var(--muted); }
+
+@media (max-width: 899px) {
+  .layout { display: block; min-height: 0; }
+  .panel { position: static; height: auto; overflow: visible; padding: 18px 16px 14px; }
+  .tablebox { flex: none; max-height: 330px; }
+  .stage { padding: 16px 16px 28px; }
+  .show { margin-left: 0; }
+  .var-pick { flex: 1 1 100%; }
+  .var-pick select { flex: 1 1 auto; width: auto; }
+}
+@media (pointer: coarse) {
+  .cell, .name, select { font-size: 16px; }
+  .cell { padding-block: 7px; }
+  .hint { display: none; }
+}
+@media print {
+  :root { --field: #FFFFFF; --ink: #000000; --muted: #333333; --grid: #E2E9E9; --axis: #666666; --rule: #999999; --data: #2B6A9E; --line: #B4561F; color-scheme: light; }
+  .layout { display: block; }
+  .panel, .show, .more, .tip { display: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <aside class="panel" aria-label="Your data">
+    <header>
+      <h1>Regression Lab</h1>
+      <p class="lede">Math 119. Type your data, choose <i>x</i> and <i>y</i>, and see the least-squares line.</p>
+    </header>
+
+    <div class="pick">
+      <label class="lbl" for="dataset">Data set</label>
+      <select id="dataset" autocomplete="off"></select>
+      <p class="source" id="source"></p>
+    </div>
+
+    <div class="tablebox" id="tablebox">
+      <table class="grid" id="grid" aria-label="Data table. Each column is a variable and each row is one case."></table>
+    </div>
+
+    <p class="hint">Enter moves down and Tab moves across. You can also paste from a spreadsheet.</p>
+    <div class="actions">
+      <button type="button" class="act" id="addvar">Add variable</button>
+      <button type="button" class="act" id="clear">Clear table</button>
+    </div>
+    <p class="status" id="status"></p>
+    <p class="foot">Your table is saved in this browser and is never sent anywhere.</p>
+  </aside>
+
+  <main class="stage">
+    <div class="readout">
+      <p class="eq" id="eq"></p>
+      <p class="r" id="r"></p>
+    </div>
+
+    <div class="controls">
+      <div class="vars">
+        <div class="var-pick"><label class="lbl" for="xvar"><i>x</i> is</label><select id="xvar" autocomplete="off"></select></div>
+        <div class="var-pick"><label class="lbl" for="yvar"><i>y</i> is</label><select id="yvar" autocomplete="off"></select></div>
+      </div>
+      <div class="show" role="group" aria-label="Show">
+        <span class="lbl">Show</span>
+        <label class="check" id="errors-label"><input type="checkbox" id="opt-errors" autocomplete="off">
+          <svg width="12" height="16" aria-hidden="true"><line class="err" x1="6" x2="6" y1="1" y2="15"/></svg>Errors</label>
+        <label class="check" id="band-label"><input type="checkbox" id="opt-band" autocomplete="off">
+          <svg width="26" height="16" aria-hidden="true"><line class="band" x1="0" x2="26" y1="8" y2="8"/></svg><span id="band-name">2 SD lines</span></label>
+        <label class="check" id="resid-label"><input type="checkbox" id="opt-resid" autocomplete="off" aria-controls="resid">
+          <svg width="22" height="16" aria-hidden="true"><rect class="icon-bar" x="2" y="2" width="4" height="7"/><rect class="icon-bar" x="9" y="9" width="4" height="5"/><rect class="icon-bar" x="16" y="5" width="4" height="4"/><line class="icon-zero" x1="0" x2="22" y1="9" y2="9"/></svg>Residual graph</label>
+      </div>
+    </div>
+
+    <p class="note" id="note"></p>
+
+    <div class="plotwrap" id="plot">
+      <svg class="plot" id="svg" role="img" aria-label="Scatterplot"></svg>
+      <div class="tip" id="tip" hidden></div>
+    </div>
+
+    <div class="captions" id="captions"></div>
+
+    <section class="resid" id="resid" aria-labelledby="resid-title" hidden>
+      <div class="resid-head">
+        <h2 id="resid-title">Residuals</h2>
+        <p class="resid-what">Each bar is one point’s residual, which is its actual <i>y</i> minus the <i>y</i> the line predicts. A point above the line gets a bar above 0.</p>
+      </div>
+      <div class="plotwrap" id="rplot">
+        <svg class="plot" id="rsvg" role="img" aria-label="Bar graph of the residuals"></svg>
+        <div class="tip" id="rtip" hidden></div>
+      </div>
+      <div class="captions" id="rcaptions"></div>
+      <details class="more" id="rmore">
+        <summary>Residual for each point</summary>
+        <table class="rtable" id="rtable"></table>
+      </details>
+    </section>
+
+    <details class="more">
+      <summary>Numbers behind the line</summary>
+      <table id="details"></table>
+    </details>
+  </main>
+</div>
+<div class="sr" id="live" aria-live="polite"></div>
+<noscript><p style="padding:16px">This tool runs in your browser and needs JavaScript turned on.</p></noscript>
+
+<script>
+'use strict';
+
+/* ===================================================================
+   Settings you may want to change
+   =================================================================== */
+
+// The SD of the errors divides the sum of squared errors by (n − this number).
+// 1 matches the SD taught in the course, so it equals SD of y × √(1 − r²).
+// Change it to 2 to match statistical software (Excel's STEYX, R's residual standard error).
+const SD_DIVIDE_BY_N_MINUS = 1;
+
+// How many SDs of the errors the dashed lines sit from the regression line.
+const BAND_SDS = 2;
+
+// Change to true to open the residual graph on every visit (the other options always start off).
+const SHOW_RESIDUALS_AT_START = false;
+
+// Headings for the groups of examples in the Data set menu, in menu order.
+const EXAMPLE_GROUPS = { examples: 'Examples', class: 'Residuals in class', activity: 'Residual detectives' };
+
+const STORAGE_KEY = 'regression-lab-v1';
+const MIN_ROWS = 8;
+const MAX_ROWS = 5000;
+
+const PENGUIN_SOURCE = 'Palmer Station penguins: Gorman, Williams & Fraser (2014); palmerpenguins data set.';
+const ANSCOMBE_SOURCE = 'Anscombe (1973), The American Statistician 27:17–21.';
+
+const EXAMPLES = {
+  penguins10: {
+    label: 'Ten penguins (in-class activity)',
+    names: ['Flipper length (mm)', 'Body mass (g)'],
+    rows: [[186,3300],[180,3700],[188,4100],[195,4000],[215,5050],[209,4700],[224,5550],[220,6000],[202,3800],[207,4000]],
+    source: PENGUIN_SOURCE,
+  },
+  penguins342: {
+    label: 'All 342 penguins (four variables)',
+    names: ['Flipper length (mm)', 'Body mass (g)', 'Bill length (mm)', 'Bill depth (mm)'],
+    rows: [
+      [181,3750,39.1,18.7],[186,3800,39.5,17.4],[195,3250,40.3,18],[193,3450,36.7,19.3],[190,3650,39.3,20.6],
+      [181,3625,38.9,17.8],[195,4675,39.2,19.6],[193,3475,34.1,18.1],[190,4250,42,20.2],[186,3300,37.8,17.1],
+      [180,3700,37.8,17.3],[182,3200,41.1,17.6],[191,3800,38.6,21.2],[198,4400,34.6,21.1],[185,3700,36.6,17.8],
+      [195,3450,38.7,19],[197,4500,42.5,20.7],[184,3325,34.4,18.4],[194,4200,46,21.5],[174,3400,37.8,18.3],
+      [180,3600,37.7,18.7],[189,3800,35.9,19.2],[185,3950,38.2,18.1],[180,3800,38.8,17.2],[187,3800,35.3,18.9],
+      [183,3550,40.6,18.6],[187,3200,40.5,17.9],[172,3150,37.9,18.6],[180,3950,40.5,18.9],[178,3250,39.5,16.7],
+      [178,3900,37.2,18.1],[188,3300,39.5,17.8],[184,3900,40.9,18.9],[195,3325,36.4,17],[196,4150,39.2,21.1],
+      [190,3950,38.8,20],[180,3550,42.2,18.5],[181,3300,37.6,19.3],[184,4650,39.8,19.1],[182,3150,36.5,18],
+      [195,3900,40.8,18.4],[186,3100,36,18.5],[196,4400,44.1,19.7],[185,3000,37,16.9],[190,4600,39.6,18.8],
+      [182,3425,41.1,19],[179,2975,37.5,18.9],[190,3450,36,17.9],[191,4150,42.3,21.2],[186,3500,39.6,17.7],
+      [188,4300,40.1,18.9],[190,3450,35,17.9],[200,4050,42,19.5],[187,2900,34.5,18.1],[191,3700,41.4,18.6],
+      [186,3550,39,17.5],[193,3800,40.6,18.8],[181,2850,36.5,16.6],[194,3750,37.6,19.1],[185,3150,35.7,16.9],
+      [195,4400,41.3,21.1],[185,3600,37.6,17],[192,4050,41.1,18.2],[184,2850,36.4,17.1],[192,3950,41.6,18],
+      [195,3350,35.5,16.2],[188,4100,41.1,19.1],[190,3050,35.9,16.6],[198,4450,41.8,19.4],[190,3600,33.5,19],
+      [190,3900,39.7,18.4],[196,3550,39.6,17.2],[197,4150,45.8,18.9],[190,3700,35.5,17.5],[195,4250,42.8,18.5],
+      [191,3700,40.9,16.8],[184,3900,37.2,19.4],[187,3550,36.2,16.1],[195,4000,42.1,19.1],[189,3200,34.6,17.2],
+      [196,4700,42.9,17.6],[187,3800,36.7,18.8],[193,4200,35.1,19.4],[191,3350,37.3,17.8],[194,3550,41.3,20.3],
+      [190,3800,36.3,19.5],[189,3500,36.9,18.6],[189,3950,38.3,19.2],[190,3600,38.9,18.8],[202,3550,35.7,18],
+      [205,4300,41.1,18.1],[185,3400,34,17.1],[186,4450,39.6,18.1],[187,3300,36.2,17.3],[208,4300,40.8,18.9],
+      [190,3700,38.1,18.6],[196,4350,40.3,18.5],[178,2900,33.1,16.1],[192,4100,43.2,18.5],[192,3725,35,17.9],
+      [203,4725,41,20],[183,3075,37.7,16],[190,4250,37.8,20],[193,2925,37.9,18.6],[184,3550,39.7,18.9],
+      [199,3750,38.6,17.2],[190,3900,38.2,20],[181,3175,38.1,17],[197,4775,43.2,19],[198,3825,38.1,16.5],
+      [191,4600,45.6,20.3],[193,3200,39.7,17.7],[197,4275,42.2,19.5],[191,3900,39.6,20.7],[196,4075,42.7,18.3],
+      [188,2900,38.6,17],[199,3775,37.3,20.5],[189,3350,35.7,17],[189,3325,41.1,18.6],[187,3150,36.2,17.2],
+      [198,3500,37.7,19.8],[176,3450,40.2,17],[202,3875,41.4,18.5],[186,3050,35.2,15.9],[199,4000,40.6,19],
+      [191,3275,38.8,17.6],[195,4300,41.5,18.3],[191,3050,39,17.1],[210,4000,44.1,18],[190,3325,38.5,17.9],
+      [197,3500,43.1,19.2],[193,3500,36.8,18.5],[199,4475,37.5,18.5],[187,3425,38.1,17.6],[190,3900,41.1,17.5],
+      [191,3175,35.6,17.5],[200,3975,40.2,20.1],[185,3400,37,16.5],[193,4250,39.7,17.9],[193,3400,40.2,17.1],
+      [187,3475,40.6,17.2],[188,3050,32.1,15.5],[190,3725,40.7,17],[192,3000,37.3,16.8],[185,3650,39,18.7],
+      [190,4250,39.2,18.6],[184,3475,36.6,18.4],[195,3450,36,17.8],[193,3750,37.8,18.1],[187,3700,36,17.1],
+      [201,4000,41.5,18.5],[211,4500,46.1,13.2],[230,5700,50,16.3],[210,4450,48.7,14.1],[218,5700,50,15.2],
+      [215,5400,47.6,14.5],[210,4550,46.5,13.5],[211,4800,45.4,14.6],[219,5200,46.7,15.3],[209,4400,43.3,13.4],
+      [215,5150,46.8,15.4],[214,4650,40.9,13.7],[216,5550,49,16.1],[214,4650,45.5,13.7],[213,5850,48.4,14.6],
+      [210,4200,45.8,14.6],[217,5850,49.3,15.7],[210,4150,42,13.5],[221,6300,49.2,15.2],[209,4800,46.2,14.5],
+      [222,5350,48.7,15.1],[218,5700,50.2,14.3],[215,5000,45.1,14.5],[213,4400,46.5,14.5],[215,5050,46.3,15.8],
+      [215,5000,42.9,13.1],[215,5100,46.1,15.1],[216,4100,44.5,14.3],[215,5650,47.8,15],[210,4600,48.2,14.3],
+      [220,5550,50,15.3],[222,5250,47.3,15.3],[209,4700,42.8,14.2],[207,5050,45.1,14.5],[230,6050,59.6,17],
+      [220,5150,49.1,14.8],[220,5400,48.4,16.3],[213,4950,42.6,13.7],[219,5250,44.4,17.3],[208,4350,44,13.6],
+      [208,5350,48.7,15.7],[208,3950,42.7,13.7],[225,5700,49.6,16],[210,4300,45.3,13.7],[216,4750,49.6,15],
+      [222,5550,50.5,15.9],[217,4900,43.6,13.9],[210,4200,45.5,13.9],[225,5400,50.5,15.9],[213,5100,44.9,13.3],
+      [215,5300,45.2,15.8],[210,4850,46.6,14.2],[220,5300,48.5,14.1],[210,4400,45.1,14.4],[225,5000,50.1,15],
+      [217,4900,46.5,14.4],[220,5050,45,15.4],[208,4300,43.8,13.9],[220,5000,45.5,15],[208,4450,43.2,14.5],
+      [224,5550,50.4,15.3],[208,4200,45.3,13.8],[221,5300,46.2,14.9],[214,4400,45.7,13.9],[231,5650,54.3,15.7],
+      [219,4700,45.8,14.2],[230,5700,49.8,16.8],[214,4650,46.2,14.4],[229,5800,49.5,16.2],[220,4700,43.5,14.2],
+      [223,5550,50.7,15],[216,4750,47.7,15],[221,5000,46.4,15.6],[221,5100,48.2,15.6],[217,5200,46.5,14.8],
+      [216,4700,46.4,15],[230,5800,48.6,16],[209,4600,47.5,14.2],[220,6000,51.1,16.3],[215,4750,45.2,13.8],
+      [223,5950,45.2,16.4],[212,4625,49.1,14.5],[221,5450,52.5,15.6],[212,4725,47.4,14.6],[224,5350,50,15.9],
+      [212,4750,44.9,13.8],[228,5600,50.8,17.3],[218,4600,43.4,14.4],[218,5300,51.3,14.2],[212,4875,47.5,14],
+      [230,5550,52.1,17],[218,4950,47.5,15],[228,5400,52.2,17.1],[212,4750,45.5,14.5],[224,5650,49.5,16.1],
+      [214,4850,44.5,14.7],[226,5200,50.8,15.7],[216,4925,49.4,15.8],[222,4875,46.9,14.6],[203,4625,48.4,14.4],
+      [225,5250,51.1,16.5],[219,4850,48.5,15],[228,5600,55.9,17],[215,4975,47.2,15.5],[228,5500,49.1,15],
+      [216,4725,47.3,13.8],[215,5500,46.8,16.1],[210,4700,41.7,14.7],[219,5500,53.4,15.8],[208,4575,43.3,14],
+      [209,5500,48.1,15.1],[216,5000,50.5,15.2],[229,5950,49.8,15.9],[213,4650,43.5,15.2],[230,5500,51.5,16.3],
+      [217,4375,46.2,14.1],[230,5850,55.1,16],[217,4875,44.5,15.7],[222,6000,48.8,16.2],[214,4925,47.2,13.7],
+      [215,4850,46.8,14.3],[222,5750,50.4,15.7],[212,5200,45.2,14.8],[213,5400,49.9,16.1],[192,3500,46.5,17.9],
+      [196,3900,50,19.5],[193,3650,51.3,19.2],[188,3525,45.4,18.7],[197,3725,52.7,19.8],[198,3950,45.2,17.8],
+      [178,3250,46.1,18.2],[197,3750,51.3,18.2],[195,4150,46,18.9],[198,3700,51.3,19.9],[193,3800,46.6,17.8],
+      [194,3775,51.7,20.3],[185,3700,47,17.3],[201,4050,52,18.1],[190,3575,45.9,17.1],[201,4050,50.5,19.6],
+      [197,3300,50.3,20],[181,3700,58,17.8],[190,3450,46.4,18.6],[195,4400,49.2,18.2],[181,3600,42.4,17.3],
+      [191,3400,48.5,17.5],[187,2900,43.2,16.6],[193,3800,50.6,19.4],[195,3300,46.7,17.9],[197,4150,52,19],
+      [200,3400,50.5,18.4],[200,3800,49.5,19],[191,3700,46.4,17.8],[205,4550,52.8,20],[187,3200,40.9,16.6],
+      [201,4300,54.2,20.8],[187,3350,42.5,16.7],[203,4100,51,18.8],[195,3600,49.7,18.6],[199,3900,47.5,16.8],
+      [195,3850,47.6,18.3],[210,4800,52,20.7],[192,2700,46.9,16.6],[205,4500,53.5,19.9],[210,3950,49,19.5],
+      [187,3650,46.2,17.5],[196,3550,50.9,19.1],[196,3500,45.5,17],[196,3675,50.9,17.9],[201,4450,50.8,18.5],
+      [190,3400,50.1,17.9],[212,4300,49,19.6],[187,3250,51.5,18.7],[198,3675,49.8,17.3],[199,3325,48.1,16.4],
+      [201,3950,51.4,19],[193,3600,45.7,17.3],[203,4050,50.7,19.7],[187,3350,42.5,17.3],[197,3450,52.2,18.8],
+      [191,3250,45.2,16.6],[203,4050,49.3,19.9],[202,3800,50.2,18.8],[194,3525,45.6,19.4],[206,3950,51.9,19.5],
+      [189,3650,46.8,16.5],[195,3650,45.7,17],[207,4000,55.8,19.8],[202,3400,43.5,18.1],[193,3775,49.6,18.2],
+      [210,4100,50.8,19],[198,3775,50.2,18.7],
+    ],
+    source: PENGUIN_SOURCE,
+  },
+  anscombe1: {
+    label: 'Anscombe’s data set I',
+    names: ['x1', 'y1'],
+    rows: [[10,8.04],[8,6.95],[13,7.58],[9,8.81],[11,8.33],[14,9.96],[6,7.24],[4,4.26],[12,10.84],[7,4.82],[5,5.68]],
+    source: ANSCOMBE_SOURCE,
+  },
+  anscombe2: {
+    label: 'Anscombe’s data set II',
+    names: ['x2', 'y2'],
+    rows: [[10,9.14],[8,8.14],[13,8.74],[9,8.77],[11,9.26],[14,8.1],[6,6.13],[4,3.1],[12,9.13],[7,7.26],[5,4.74]],
+    source: ANSCOMBE_SOURCE,
+  },
+  anscombe3: {
+    label: 'Anscombe’s data set III',
+    names: ['x3', 'y3'],
+    rows: [[10,7.46],[8,6.77],[13,12.74],[9,7.11],[11,7.81],[14,8.84],[6,6.08],[4,5.39],[12,8.15],[7,6.42],[5,5.73]],
+    source: ANSCOMBE_SOURCE,
+  },
+  anscombe4: {
+    label: 'Anscombe’s data set IV',
+    names: ['x4', 'y4'],
+    rows: [[8,6.58],[8,5.76],[8,7.71],[8,8.84],[8,8.47],[8,7.04],[8,5.25],[19,12.5],[8,5.56],[8,7.91],[8,6.89]],
+    source: ANSCOMBE_SOURCE,
+  },
+  cars10: {
+    label: 'Ten cars (stopping distance)',
+    group: 'class',
+    names: ['Speed (mph)', 'Stopping distance (ft)'],
+    rows: [
+      [7,4],[10,26],[12,20],[13,34],[14,80],[16,40],[18,56],[19,68],[20,64],[24,93],
+    ],
+    source: 'Ten of the 50 cars in Ezekiel (1930), from R’s cars data set. The data were recorded in the 1920s.',
+  },
+  women: {
+    label: 'Women’s average height and weight',
+    group: 'class',
+    names: ['Height (in)', 'Weight (lb)'],
+    rows: [
+      [58,115],[59,117],[60,120],[61,123],[62,126],[63,129],[64,132],[65,135],[66,139],[67,142],[68,146],[69,150],[70,154],
+      [71,159],[72,164],
+    ],
+    source: 'Average weight of American women aged 30 to 39 at each height. The World Almanac and Book of Facts (1975), from R’s women data set.',
+  },
+  orange: {
+    label: 'Orange trees (age and trunk size)',
+    group: 'class',
+    names: ['Age (days)', 'Trunk circumference (mm)'],
+    rows: [
+      [118,30],[484,58],[664,87],[1004,115],[1231,120],[1372,142],[1582,145],[118,33],[484,69],[664,111],[1004,156],
+      [1231,172],[1372,203],[1582,203],[118,30],[484,51],[664,75],[1004,108],[1231,115],[1372,139],[1582,140],[118,32],
+      [484,62],[664,112],[1004,167],[1231,179],[1372,209],[1582,214],[118,30],[484,49],[664,81],[1004,125],[1231,142],
+      [1372,174],[1582,177],
+    ],
+    source: 'Five orange trees, each measured at seven ages. Draper and Smith (1998), from R’s Orange data set.',
+  },
+  co2: {
+    label: 'CO₂ at Mauna Loa, 2018 to 2021',
+    group: 'class',
+    names: ['Year', 'CO₂ (ppm)'],
+    rows: [
+      [2018.0417,408.15],[2018.125,408.52],[2018.2083,409.59],[2018.2917,410.45],[2018.375,411.44],[2018.4583,410.99],
+      [2018.5417,408.9],[2018.625,407.16],[2018.7083,405.71],[2018.7917,406.19],[2018.875,408.21],[2018.9583,409.27],
+      [2019.0417,411.03],[2019.125,411.96],[2019.2083,412.18],[2019.2917,413.54],[2019.375,414.86],[2019.4583,414.15],
+      [2019.5417,411.96],[2019.625,410.17],[2019.7083,408.76],[2019.7917,408.74],[2019.875,410.47],[2019.9583,411.97],
+      [2020.0417,413.59],[2020.125,414.32],[2020.2083,414.72],[2020.2917,416.42],[2020.375,417.28],[2020.4583,416.58],
+      [2020.5417,414.58],[2020.625,412.75],[2020.7083,411.5],[2020.7917,411.49],[2020.875,413.1],[2020.9583,414.23],
+      [2021.0417,415.49],[2021.125,416.72],[2021.2083,417.61],[2021.2917,419.01],[2021.375,419.09],[2021.4583,418.93],
+      [2021.5417,416.9],[2021.625,414.42],[2021.7083,413.26],[2021.7917,413.9],[2021.875,414.97],[2021.9583,416.67],
+    ],
+    source: 'Monthly average carbon dioxide at Mauna Loa Observatory, Hawaii. NOAA Global Monitoring Laboratory and Scripps Institution of Oceanography.',
+  },
+  ambulance: {
+    label: 'Ambulance trips (made-up data)',
+    group: 'class',
+    names: ['Distance (miles)', 'Travel time (min)'],
+    rows: [
+      [11.5,25],[13.7,30],[9.3,22],[2.4,12],[11.7,28],[2.6,19],[5.2,15],[12.7,27],[6.7,17],[6.1,16],[9.1,21],[5.7,14],
+      [7.5,18],[1.7,17],[2.1,9],[2.2,10],[6.6,16],[11.3,25],[5.8,14],[8.7,23],[8.4,21],[12.4,28],[13.5,33],[5.1,13],[13,29],
+      [4,14],[7.9,25],[10.7,24],[11.8,37],[4.2,13],[5,13],[10.6,23],[2.3,8],[11.2,29],[12,29],[10.5,38],[1.2,6],[6.8,17],
+      [11.9,30],[8.1,21],
+    ],
+    source: 'Made-up data for class. Most trips go smoothly, but traffic sometimes adds a long delay.',
+  },
+  galton1: {
+    label: 'Fathers and sons, one son per family (Galton)',
+    group: 'class',
+    names: ['Father’s height (in)', 'Son’s height (in)'],
+    rows: [
+      [78.5,73.2],[75.5,73.5],[75,71],[75,70.5],[75,69],[74,76.5],[74,74],[73,71],[73,68],[73,71],[73,70.2],[73,62.5],
+      [72.7,73.2],[72,73],[72,71],[72,69.5],[72,69],[72,69],[72,73],[72.5,71],[72,69],[72,70],[71,72],[71,73.2],[71,70],
+      [71,69],[71,71],[71,71],[71.7,70.5],[71,72],[71.5,73],[71.5,67.7],[71,68],[71.7,71],[71,68],[71.5,72],[71,73],[71,71],
+      [71,70],[71,71],[71,71],[71,70.5],[71,70],[71,70.5],[71,69],[70,69],[70,68.7],[70,75],[70,69],[70,72],[70.5,68.5],
+      [70,70.5],[70,65],[70,70],[70,75],[70,72.5],[70,69],[70,68.7],[70,70.7],[70,68],[70,72],[70.5,68],[70,68],[70,69.5],
+      [70,70],[70.5,70],[70.5,67],[70,67.5],[70,68],[70,66.5],[70.5,69.5],[70.3,65.2],[70.5,72],[70,67],[70,67],[70,71.5],
+      [70,72],[69,70],[69,73],[69,70],[69,74],[69,68],[69,70.5],[69.5,67.5],[69,71],[69.5,71],[69,73],[69,68.5],[69.5,68],
+      [69.2,71.7],[69,69],[69,72],[69,70],[69,70.5],[69,70.5],[69.5,72],[69,69],[69.5,67.8],[69,71],[69,72],[69.5,69.5],
+      [69,68],[69,70.5],[69,69],[69,69.5],[68.7,71],[68.5,71],[68.5,68],[68,66],[68,66],[68,71.5],[68,72],[68.5,66],
+      [68.5,72],[68,68],[68,66],[68,68.5],[68,69],[68,70.5],[68.5,70],[68,67],[68,70],[68,68],[68,66],[68.5,68.2],[68,70],
+      [68.2,67],[68,68.5],[68.7,67.7],[68,66.5],[68,64],[68,66.7],[68,64],[68,66.5],[68.5,69],[68,64.7],[67,71.5],[67,71],
+      [67,71],[67,67.5],[67,69],[67,70],[67,65],[67.5,69],[67,71.5],[67,65.5],[67,68],[67.5,70],[67,67],[66,66],[66,65],
+      [66,65],[66,68],[66.5,68.7],[66,71],[66,70],[66.5,67.2],[66.5,70],[66,70],[66,68],[66,65],[66,68],[65,66],[65,63],
+      [65,65],[65,68],[65,70.7],[65,68],[65,67],[65,70],[65,66],[65.5,71],[65.5,67],[64,68],[64,68],[64,64.5],[64,66],
+      [62,64],[62.5,66.5],
+    ],
+    source: 'Galton’s family height data from 1886, with one son picked at random from each of the 179 families that had sons. Hanley (2004), from the HistData package.',
+  },
+  faithful: {
+    label: 'A. Old Faithful eruptions',
+    group: 'activity',
+    names: ['Eruption length (min)', 'Waiting time (min)'],
+    rows: [
+      [3.6,79],[1.8,54],[3.333,74],[2.283,62],[4.533,85],[2.883,55],[4.7,88],[3.6,85],[1.95,51],[4.35,85],[1.833,54],
+      [3.917,84],[4.2,78],[1.75,47],[4.7,83],[2.167,52],[1.75,62],[4.8,84],[1.6,52],[4.25,79],[1.8,51],[1.75,47],[3.45,78],
+      [3.067,69],[4.533,74],[3.6,83],[1.967,55],[4.083,76],[3.85,78],[4.433,79],[4.3,73],[4.467,77],[3.367,66],[4.033,80],
+      [3.833,74],[2.017,52],[1.867,48],[4.833,80],[1.833,59],[4.783,90],[4.35,80],[1.883,58],[4.567,84],[1.75,58],
+      [4.533,73],[3.317,83],[3.833,64],[2.1,53],[4.633,82],[2,59],[4.8,75],[4.716,90],[1.833,54],[4.833,80],[1.733,54],
+      [4.883,83],[3.717,71],[1.667,64],[4.567,77],[4.317,81],[2.233,59],[4.5,84],[1.75,48],[4.8,82],[1.817,60],[4.4,92],
+      [4.167,78],[4.7,78],[2.067,65],[4.7,73],[4.033,82],[1.967,56],[4.5,79],[4,71],[1.983,62],[5.067,76],[2.017,60],
+      [4.567,78],[3.883,76],[3.6,83],[4.133,75],[4.333,82],[4.1,70],[2.633,65],[4.067,73],[4.933,88],[3.95,76],[4.517,80],
+      [2.167,48],[4,86],[2.2,60],[4.333,90],[1.867,50],[4.817,78],[1.833,63],[4.3,72],[4.667,84],[3.75,75],[1.867,51],
+      [4.9,82],[2.483,62],[4.367,88],[2.1,49],[4.5,83],[4.05,81],[1.867,47],[4.7,84],[1.783,52],[4.85,86],[3.683,81],
+      [4.733,75],[2.3,59],[4.9,89],[4.417,79],[1.7,59],[4.633,81],[2.317,50],[4.6,85],[1.817,59],[4.417,87],[2.617,53],
+      [4.067,69],[4.25,77],[1.967,56],[4.6,88],[3.767,81],[1.917,45],[4.5,82],[2.267,55],[4.65,90],[1.867,45],[4.167,83],
+      [2.8,56],[4.333,89],[1.833,46],[4.383,82],[1.883,51],[4.933,86],[2.033,53],[3.733,79],[4.233,81],[2.233,60],
+      [4.533,82],[4.817,77],[4.333,76],[1.983,59],[4.633,80],[2.017,49],[5.1,96],[1.8,53],[5.033,77],[4,77],[2.4,65],
+      [4.6,81],[3.567,71],[4,70],[4.5,81],[4.083,93],[1.8,53],[3.967,89],[2.2,45],[4.15,86],[2,58],[3.833,78],[3.5,66],
+      [4.583,76],[2.367,63],[5,88],[1.933,52],[4.617,93],[1.917,49],[2.083,57],[4.583,77],[3.333,68],[4.167,81],[4.333,81],
+      [4.5,73],[2.417,50],[4,85],[4.167,74],[1.883,55],[4.583,77],[4.25,83],[3.767,83],[2.033,51],[4.433,78],[4.083,84],
+      [1.833,46],[4.417,83],[2.183,55],[4.8,81],[1.833,57],[4.8,76],[4.1,84],[3.966,77],[4.233,81],[3.5,87],[4.366,77],
+      [2.25,51],[4.667,78],[2.1,60],[4.35,82],[4.133,91],[1.867,53],[4.6,78],[1.783,46],[4.367,77],[3.85,84],[1.933,49],
+      [4.5,83],[2.383,71],[4.7,80],[1.867,49],[3.833,75],[3.417,64],[4.233,76],[2.4,53],[4.8,94],[2,55],[4.15,76],
+      [1.867,50],[4.267,82],[1.75,54],[4.483,75],[4,78],[4.117,79],[4.083,78],[4.267,78],[3.917,70],[4.55,79],[4.083,70],
+      [2.417,54],[4.183,86],[2.217,50],[4.45,90],[1.883,54],[1.85,54],[4.283,77],[3.95,79],[2.333,64],[4.15,75],[2.35,47],
+      [4.933,86],[2.9,63],[4.583,85],[3.833,82],[2.083,57],[4.367,82],[2.133,67],[4.35,74],[2.2,54],[4.45,83],[3.567,73],
+      [4.5,73],[4.15,88],[3.817,80],[3.917,71],[4.45,83],[2,56],[4.283,79],[4.767,78],[4.533,84],[1.85,58],[4.25,83],
+      [1.983,43],[2.25,60],[4.75,75],[4.117,81],[2.15,46],[4.417,90],[1.817,46],[4.467,74],
+    ],
+    source: 'Eruption length and waiting time for 272 eruptions of Old Faithful geyser in Yellowstone National Park. Härdle (1991), from R’s faithful data set.',
+  },
+  lungdeaths: {
+    label: 'B. UK lung disease deaths by month',
+    group: 'activity',
+    names: ['Year', 'Deaths'],
+    rows: [
+      [1974,3035],[1974.0833,2552],[1974.1667,2704],[1974.25,2554],[1974.3333,2014],[1974.4167,1655],[1974.5,1721],
+      [1974.5833,1524],[1974.6667,1596],[1974.75,2074],[1974.8333,2199],[1974.9167,2512],[1975,2933],[1975.0833,2889],
+      [1975.1667,2938],[1975.25,2497],[1975.3333,1870],[1975.4167,1726],[1975.5,1607],[1975.5833,1545],[1975.6667,1396],
+      [1975.75,1787],[1975.8333,2076],[1975.9167,2837],[1976,2787],[1976.0833,3891],[1976.1667,3179],[1976.25,2011],
+      [1976.3333,1636],[1976.4167,1580],[1976.5,1489],[1976.5833,1300],[1976.6667,1356],[1976.75,1653],[1976.8333,2013],
+      [1976.9167,2823],[1977,3102],[1977.0833,2294],[1977.1667,2385],[1977.25,2444],[1977.3333,1748],[1977.4167,1554],
+      [1977.5,1498],[1977.5833,1361],[1977.6667,1346],[1977.75,1564],[1977.8333,1640],[1977.9167,2293],[1978,2815],
+      [1978.0833,3137],[1978.1667,2679],[1978.25,1969],[1978.3333,1870],[1978.4167,1633],[1978.5,1529],[1978.5833,1366],
+      [1978.6667,1357],[1978.75,1570],[1978.8333,1535],[1978.9167,2491],[1979,3084],[1979.0833,2605],[1979.1667,2573],
+      [1979.25,2143],[1979.3333,1693],[1979.4167,1504],[1979.5,1461],[1979.5833,1354],[1979.6667,1333],[1979.75,1492],
+      [1979.8333,1781],[1979.9167,1915],
+    ],
+    source: 'Monthly deaths from bronchitis, emphysema and asthma in the UK, 1974 to 1979. Diggle (1990), from R’s ldeaths data set.',
+  },
+  puromycin: {
+    label: 'C. Enzyme speed and substrate',
+    group: 'activity',
+    names: ['Substrate (ppm)', 'Reaction rate (counts/min²)'],
+    rows: [
+      [0.02,76],[0.02,47],[0.06,97],[0.06,107],[0.11,123],[0.11,139],[0.22,159],[0.22,152],[0.56,191],[0.56,201],[1.1,207],
+      [1.1,200],
+    ],
+    source: 'The starting speed of an enzyme reaction, with the enzyme treated with puromycin, measured twice at each of six substrate concentrations. Treloar (1974), from R’s Puromycin data set.',
+  },
+  wages: {
+    label: 'D. Wages and years of school (1985)',
+    group: 'activity',
+    names: ['Education (years)', 'Wage ($ per hour)'],
+    rows: [
+      [8,5.1],[9,4.95],[12,6.67],[12,4],[12,7.5],[13,13.07],[10,4.45],[12,19.47],[16,13.28],[12,8.75],[12,11.35],[12,11.5],
+      [8,6.5],[9,6.25],[9,19.98],[12,7.3],[7,8],[12,22.2],[11,3.65],[12,20.55],[12,5.71],[7,7],[12,3.75],[11,4.5],[12,9.56],
+      [6,5.75],[12,9.36],[10,6.5],[12,3.35],[12,4.75],[14,8.9],[12,4],[8,4.7],[17,5],[12,9.25],[12,10.67],[12,7.61],[12,10],
+      [12,7.5],[14,12.2],[12,3.35],[14,11],[12,12],[9,4.85],[13,4.3],[7,6],[16,15],[10,4.85],[8,9],[12,6.36],[12,9.15],
+      [16,11],[12,4.5],[12,4.8],[13,4],[12,5.5],[13,8.4],[10,6.75],[12,10],[12,5],[11,6.5],[12,10.75],[3,7],[12,11.43],
+      [12,4],[10,9],[12,13],[12,12.22],[12,6.28],[10,6.75],[11,3.35],[14,16],[10,5.25],[8,3.5],[8,4.22],[6,3],[11,4],
+      [12,10],[12,5],[12,16],[14,13.98],[12,13.26],[10,6.1],[16,3.75],[13,9],[12,9.45],[11,5.5],[12,8.93],[12,6.25],
+      [11,9.75],[12,6.73],[12,7.78],[12,2.85],[12,3.35],[12,19.98],[12,8.5],[15,9.75],[12,15],[12,8],[13,11.25],[11,14],
+      [10,10],[12,6.5],[12,9.83],[14,18.5],[12,12.5],[14,26],[5,14],[12,10.5],[8,11],[13,12.47],[12,12.5],[12,15],[12,6],
+      [11,9.5],[16,5],[11,3.75],[12,12.57],[8,6.88],[12,5.5],[12,7],[12,4.5],[12,6.5],[12,12],[12,5],[12,6.5],[9,6.8],
+      [13,8.75],[12,3.75],[12,4.5],[12,6],[12,5.5],[12,13],[14,5.65],[9,4.8],[10,7],[12,5.25],[7,3.35],[9,8.5],[12,6],
+      [12,6.75],[12,8.89],[11,14.21],[11,10.78],[10,8.9],[12,7.5],[12,4.5],[12,11.25],[12,13.45],[13,6],[6,4.62],[14,10.58],
+      [12,5],[14,8.2],[12,6.25],[12,8.5],[16,24.98],[14,16.65],[14,6.25],[12,4.55],[12,11.25],[13,21.25],[17,12.65],
+      [12,7.5],[14,10.25],[16,3.35],[16,13.45],[15,4.84],[17,26.29],[12,6.58],[14,44.5],[12,15],[16,11.25],[12,7],[14,10],
+      [16,14.53],[18,20],[15,22.5],[12,3.64],[12,10.62],[18,24.98],[16,6],[18,19],[16,13.2],[16,22.5],[16,15],[17,6.88],
+      [12,11.84],[14,16.14],[18,13.95],[12,13.16],[12,5.3],[12,4.5],[18,10],[10,10],[16,10],[16,9.37],[16,5.8],[13,17.86],
+      [12,1],[14,8.8],[16,9],[17,18.16],[12,7.81],[16,10.62],[12,4.5],[15,17.25],[13,10.5],[14,9.22],[16,15],[18,22.5],
+      [13,4.55],[12,9],[18,13.33],[14,15],[14,7.5],[12,4.25],[12,12.5],[12,5.13],[16,3.35],[12,11.11],[11,3.84],[12,6.4],
+      [14,5.56],[12,10],[16,5.65],[16,11.5],[11,3.5],[13,3.35],[12,4.75],[14,19.98],[14,3.5],[12,4],[12,7],[13,6.25],
+      [14,4.5],[14,14.29],[12,5],[14,13.75],[12,13.71],[12,7.5],[12,3.8],[14,5],[12,9.42],[12,5.5],[15,3.75],[12,3.5],
+      [13,5.8],[17,12],[14,5],[13,8.75],[16,10],[12,8.5],[12,8.63],[16,9],[16,5.5],[13,11.11],[14,10],[18,5.2],[14,8],
+      [12,3.56],[12,5.2],[12,11.67],[12,11.32],[12,7.5],[11,5.5],[16,5],[12,7.75],[12,5.25],[12,9],[12,9.65],[18,5.21],
+      [11,7],[12,12.16],[16,5.25],[13,10.32],[16,3.35],[13,7.7],[12,9.17],[12,8.43],[12,4],[12,4.13],[12,3],[13,4.25],
+      [14,7.53],[14,10.53],[12,5],[12,15.03],[17,11.25],[16,6.25],[12,3.5],[12,6.85],[13,12.5],[12,12],[13,6],[12,9.5],
+      [12,4.1],[14,10.43],[12,5],[12,7.69],[12,5.5],[12,6.4],[12,12.5],[13,6.25],[12,8],[9,9.6],[13,9.1],[12,7.5],[13,5],
+      [12,7],[13,3.55],[12,8.5],[13,4.5],[16,7.88],[12,5.25],[12,5],[12,9.33],[12,10.5],[12,7.5],[12,9.5],[12,9.6],
+      [17,5.87],[14,11.02],[12,5],[14,5.62],[15,12.5],[12,10.81],[12,5.4],[11,7],[12,4.59],[12,6],[16,11.71],[13,5.62],
+      [12,5.5],[12,4.85],[12,6.75],[12,4.25],[12,5.75],[12,3.5],[12,3.35],[12,10.62],[12,8],[12,4.75],[17,8.5],[14,8.85],
+      [12,8],[4,6],[14,7.14],[8,3.4],[15,6],[2,3.75],[8,8.89],[11,4.35],[10,13.1],[8,4.35],[9,3.5],[12,3.8],[8,5.26],
+      [14,3.35],[12,16.26],[12,4.25],[16,4.5],[13,8],[16,4],[14,7.96],[12,4],[11,4.15],[13,5.95],[12,3.6],[10,8.75],[8,3.4],
+      [12,4.28],[12,5.35],[12,5],[12,7.65],[12,6.94],[12,7.5],[12,3.6],[12,1.75],[13,3.45],[14,9.63],[12,8.49],[12,8.99],
+      [11,3.65],[11,3.5],[12,3.43],[12,5.5],[12,6.93],[10,3.51],[12,3.75],[12,4.17],[12,9.57],[14,14.67],[14,12.5],[12,5.5],
+      [13,5.15],[12,8],[13,5.83],[12,3.35],[12,7],[10,10],[12,8],[14,6.88],[11,5.55],[11,7.5],[8,8.93],[16,9],[10,3.5],
+      [16,5.77],[14,25],[14,6.85],[11,6.5],[12,3.75],[9,3.5],[11,4.5],[13,2.01],[14,4.17],[12,13],[14,3.98],[12,7.5],
+      [12,13.12],[12,4],[12,3.95],[11,13],[12,9],[8,4.55],[9,9.5],[7,4.5],[11,8.75],[13,10],[18,18],[17,24.98],[16,12.05],
+      [14,22],[12,8.75],[18,22.2],[18,17.25],[17,6],[13,8.06],[16,9.24],[14,12],[15,10.61],[18,5.71],[16,10],[16,17.5],
+      [18,15],[16,7.78],[17,7.8],[16,10],[17,24.98],[15,10.28],[18,15],[17,12],[16,10.58],[18,5.85],[18,11.22],[14,8.56],
+      [16,13.89],[18,5.71],[18,15.79],[16,7.5],[12,11.25],[16,6.15],[16,13.45],[16,6.25],[12,6.5],[12,12],[12,8.5],[18,8],
+      [12,5.75],[16,15.73],[15,9.86],[18,13.51],[16,5.4],[18,6.25],[16,5.5],[12,5],[18,6.25],[12,5.75],[16,20.5],[14,5],
+      [18,7],[16,18],[18,12],[17,20.4],[18,22.2],[14,16.42],[14,8.63],[16,19.38],[16,14],[14,10],[17,15.95],[16,20],[16,10],
+      [16,24.98],[15,11.25],[18,22.83],[17,10.2],[16,10],[18,14],[17,12.5],[12,5.79],[17,24.98],[12,4.35],[17,11.25],
+      [16,6.67],[16,8],[18,18.16],[16,12],[16,8.89],[17,9.5],[16,13.65],[18,12],[12,15],[16,12.67],[14,7.38],[16,15.56],
+      [12,7.45],[14,6.25],[16,6.25],[17,9.37],[16,22.5],[16,7.5],[17,7],[9,5.75],[15,7.67],[15,12.5],[12,16],[16,11.79],
+      [18,11.36],[12,6.1],[17,23.25],[12,19.88],[16,15.38],
+    ],
+    source: '534 workers in the May 1985 Current Population Survey. Berndt (1991), from the AER package.',
+  },
+  chicks: {
+    label: 'E. Chick weights over three weeks',
+    group: 'activity',
+    names: ['Age (days)', 'Weight (g)'],
+    rows: [
+      [0,42],[2,51],[4,59],[6,64],[8,76],[10,93],[12,106],[14,125],[16,149],[18,171],[20,199],[21,205],[0,40],[2,49],[4,58],
+      [6,72],[8,84],[10,103],[12,122],[14,138],[16,162],[18,187],[20,209],[21,215],[0,43],[2,39],[4,55],[6,67],[8,84],
+      [10,99],[12,115],[14,138],[16,163],[18,187],[20,198],[21,202],[0,42],[2,49],[4,56],[6,67],[8,74],[10,87],[12,102],
+      [14,108],[16,136],[18,154],[20,160],[21,157],[0,41],[2,42],[4,48],[6,60],[8,79],[10,106],[12,141],[14,164],[16,197],
+      [18,199],[20,220],[21,223],[0,41],[2,49],[4,59],[6,74],[8,97],[10,124],[12,141],[14,148],[16,155],[18,160],[20,160],
+      [21,157],[0,41],[2,49],[4,57],[6,71],[8,89],[10,112],[12,146],[14,174],[16,218],[18,250],[20,288],[21,305],[0,42],
+      [2,50],[4,61],[6,71],[8,84],[10,93],[12,110],[14,116],[16,126],[18,134],[20,125],[0,42],[2,51],[4,59],[6,68],[8,85],
+      [10,96],[12,90],[14,92],[16,93],[18,100],[20,100],[21,98],[0,41],[2,44],[4,52],[6,63],[8,74],[10,81],[12,89],[14,96],
+      [16,101],[18,112],[20,120],[21,124],[0,43],[2,51],[4,63],[6,84],[8,112],[10,139],[12,168],[14,177],[16,182],[18,184],
+      [20,181],[21,175],[0,41],[2,49],[4,56],[6,62],[8,72],[10,88],[12,119],[14,135],[16,162],[18,185],[20,195],[21,205],
+      [0,41],[2,48],[4,53],[6,60],[8,65],[10,67],[12,71],[14,70],[16,71],[18,81],[20,91],[21,96],[0,41],[2,49],[4,62],
+      [6,79],[8,101],[10,128],[12,164],[14,192],[16,227],[18,248],[20,259],[21,266],[0,41],[2,49],[4,56],[6,64],[8,68],
+      [10,68],[12,67],[14,68],[0,41],[2,45],[4,49],[6,51],[8,57],[10,51],[12,54],[0,42],[2,51],[4,61],[6,72],[8,83],[10,89],
+      [12,98],[14,103],[16,113],[18,123],[20,133],[21,142],[0,39],[2,35],[0,43],[2,48],[4,55],[6,62],[8,65],[10,71],[12,82],
+      [14,88],[16,106],[18,120],[20,144],[21,157],[0,41],[2,47],[4,54],[6,58],[8,65],[10,73],[12,77],[14,89],[16,98],
+      [18,107],[20,115],[21,117],[0,40],[2,50],[4,62],[6,86],[8,125],[10,163],[12,217],[14,240],[16,275],[18,307],[20,318],
+      [21,331],[0,41],[2,55],[4,64],[6,77],[8,90],[10,95],[12,108],[14,111],[16,131],[18,148],[20,164],[21,167],[0,43],
+      [2,52],[4,61],[6,73],[8,90],[10,103],[12,127],[14,135],[16,145],[18,163],[20,170],[21,175],[0,42],[2,52],[4,58],
+      [6,74],[8,66],[10,68],[12,70],[14,71],[16,72],[18,72],[20,76],[21,74],[0,40],[2,49],[4,62],[6,78],[8,102],[10,124],
+      [12,146],[14,164],[16,197],[18,231],[20,259],[21,265],[0,42],[2,48],[4,57],[6,74],[8,93],[10,114],[12,136],[14,147],
+      [16,169],[18,205],[20,236],[21,251],[0,39],[2,46],[4,58],[6,73],[8,87],[10,100],[12,115],[14,123],[16,144],[18,163],
+      [20,185],[21,192],[0,39],[2,46],[4,58],[6,73],[8,92],[10,114],[12,145],[14,156],[16,184],[18,207],[20,212],[21,233],
+      [0,39],[2,48],[4,59],[6,74],[8,87],[10,106],[12,134],[14,150],[16,187],[18,230],[20,279],[21,309],[0,42],[2,48],
+      [4,59],[6,72],[8,85],[10,98],[12,115],[14,122],[16,143],[18,151],[20,157],[21,150],[0,42],[2,53],[4,62],[6,73],[8,85],
+      [10,102],[12,123],[14,138],[16,170],[18,204],[20,235],[21,256],[0,41],[2,49],[4,65],[6,82],[8,107],[10,129],[12,159],
+      [14,179],[16,221],[18,263],[20,291],[21,305],[0,39],[2,50],[4,63],[6,77],[8,96],[10,111],[12,137],[14,144],[16,151],
+      [18,146],[20,156],[21,147],[0,41],[2,49],[4,63],[6,85],[8,107],[10,134],[12,164],[14,186],[16,235],[18,294],[20,327],
+      [21,341],[0,41],[2,53],[4,64],[6,87],[8,123],[10,158],[12,201],[14,238],[16,287],[18,332],[20,361],[21,373],[0,39],
+      [2,48],[4,61],[6,76],[8,98],[10,116],[12,145],[14,166],[16,198],[18,227],[20,225],[21,220],[0,41],[2,48],[4,56],
+      [6,68],[8,80],[10,83],[12,103],[14,112],[16,135],[18,157],[20,169],[21,178],[0,41],[2,49],[4,61],[6,74],[8,98],
+      [10,109],[12,128],[14,154],[16,192],[18,232],[20,280],[21,290],[0,42],[2,50],[4,61],[6,78],[8,89],[10,109],[12,130],
+      [14,146],[16,170],[18,214],[20,250],[21,272],[0,41],[2,55],[4,66],[6,79],[8,101],[10,120],[12,154],[14,182],[16,215],
+      [18,262],[20,295],[21,321],[0,42],[2,51],[4,66],[6,85],[8,103],[10,124],[12,155],[14,153],[16,175],[18,184],[20,199],
+      [21,204],[0,42],[2,49],[4,63],[6,84],[8,103],[10,126],[12,160],[14,174],[16,204],[18,234],[20,269],[21,281],[0,42],
+      [2,55],[4,69],[6,96],[8,131],[10,157],[12,184],[14,188],[16,197],[18,198],[20,199],[21,200],[0,42],[2,51],[4,65],
+      [6,86],[8,103],[10,118],[12,127],[14,138],[16,145],[18,146],[0,41],[2,50],[4,61],[6,78],[8,98],[10,117],[12,135],
+      [14,141],[16,147],[18,174],[20,197],[21,196],[0,40],[2,52],[4,62],[6,82],[8,101],[10,120],[12,144],[14,156],[16,173],
+      [18,210],[20,231],[21,238],[0,41],[2,53],[4,66],[6,79],[8,100],[10,123],[12,148],[14,157],[16,168],[18,185],[20,210],
+      [21,205],[0,39],[2,50],[4,62],[6,80],[8,104],[10,125],[12,154],[14,170],[16,222],[18,261],[20,303],[21,322],[0,40],
+      [2,53],[4,64],[6,85],[8,108],[10,128],[12,152],[14,166],[16,184],[18,203],[20,233],[21,237],[0,41],[2,54],[4,67],
+      [6,84],[8,105],[10,122],[12,155],[14,175],[16,205],[18,234],[20,264],[21,264],
+    ],
+    source: 'Fifty chicks on four diets, weighed at hatching, every other day after that, and on day 21. Crowder and Hand (1990), from R’s ChickWeight data set.',
+  },
+};
+
+/* ===================================================================
+   Statistics
+   =================================================================== */
+
+// Ordinary least squares for y on x. pts is a list of {x, y}.
+// m and b minimize the sum of squared vertical errors.
+function fit(pts) {
+  const n = pts.length;
+  const out = { n, hasLine: false, reason: n < 2 ? 'few' : '', r: NaN, sdErr: NaN };
+  if (n === 0) return out;
+
+  let sumX = 0, sumY = 0;
+  for (const p of pts) { sumX += p.x; sumY += p.y; }
+  const mx = sumX / n, my = sumY / n;
+  out.mx = mx; out.my = my;
+  if (n < 2) return out;
+
+  let ssx = 0, ssy = 0, sxy = 0;
+  for (const p of pts) {
+    const dx = p.x - mx, dy = p.y - my;
+    ssx += dx * dx; ssy += dy * dy; sxy += dx * dy;
+  }
+  if (![mx, my, ssx, ssy, sxy].every(Number.isFinite)) { out.reason = 'huge'; return out; }
+
+  // Exact comparisons, because rounding in the mean can make a constant column look like it varies.
+  const xFlat = pts.every((p) => p.x === pts[0].x);
+  const yFlat = pts.every((p) => p.y === pts[0].y);
+  out.sdx = xFlat ? 0 : Math.sqrt(ssx / (n - 1));
+  out.sdy = yFlat ? 0 : Math.sqrt(ssy / (n - 1));
+  if (xFlat) { out.reason = 'xflat'; return out; }
+
+  const rootProduct = Math.sqrt(ssx) * Math.sqrt(ssy);
+  if (!yFlat && Math.abs(sxy) <= 1e-13 * rootProduct) sxy = 0;   // r is zero apart from rounding
+
+  let m = yFlat ? 0 : sxy / ssx;
+  let b = yFlat ? pts[0].y : my - m * mx;
+  if (Math.abs(b) <= 1e-11 * (Math.abs(m * mx) + Math.abs(my))) b = 0;
+
+  let sse = 0;
+  for (const p of pts) { const e = p.y - (m * p.x + b); sse += e * e; }
+  if (yFlat || sse <= 1e-20 * ssy) sse = 0;                      // an exact fit, apart from rounding
+
+  out.hasLine = true;
+  out.m = m; out.b = b; out.sse = sse;
+  out.yFlat = yFlat;
+  out.r = yFlat ? NaN : sse === 0 ? Math.sign(m) : Math.max(-1, Math.min(1, sxy / rootProduct));
+  const divisor = n - SD_DIVIDE_BY_N_MINUS;
+  out.sdErr = divisor > 0 ? Math.sqrt(sse / divisor) : NaN;
+  return out;
+}
+
+const predict = (F, x) => F.m * x + F.b;
+const errorOf = (F, p) => (F.sse === 0 ? 0 : p.y - predict(F, p.x));
+
+/* ===================================================================
+   Reading and formatting numbers
+   =================================================================== */
+
+const MINUS = '−';
+
+// Returns null for a blank, NaN for text that isn't a number, otherwise the number.
+function parseNum(text) {
+  let t = String(text).trim();
+  if (t === '') return null;
+  t = t.replace(/[−–]/g, '-');
+  if (/^[-+]?\d{1,3}(,\d{3})+(\.\d*)?$/.test(t)) t = t.replace(/,/g, '');
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(t)) return NaN;
+  const v = Number(t);
+  return Number.isFinite(v) ? v : NaN;
+}
+
+const SUPERSCRIPT = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const sup = (k) => String(k).replace(/./g, (c) => SUPERSCRIPT[c]);
+function group(s) {
+  const [whole, dec] = s.split('.');
+  const g = whole.replace(/\B(?=(\d{3})+$)/g, ',');
+  return dec === undefined ? g : g + '.' + dec;
+}
+function scientific(a, digits) {
+  let e = Math.floor(Math.log10(a));
+  let t = (a / Math.pow(10, e)).toPrecision(digits);
+  if (Number(t) >= 10) { e += 1; t = (a / Math.pow(10, e)).toPrecision(digits); }
+  return t + ' × 10' + sup(e);
+}
+// Four significant figures. Whole-number parts are never rounded away.
+function sig4(v) {
+  if (!Number.isFinite(v)) return '–';
+  if (v === 0) return '0';
+  const a = Math.abs(v), sign = v < 0 ? MINUS : '';
+  if (a >= 1e9 || a < 1e-4) return sign + scientific(a, 4);
+  if (a >= 1000) { const t = String(Math.round(a)); return sign + (a >= 10000 ? group(t) : t); }
+  return sign + a.toPrecision(4);
+}
+// Two decimals, as in class, but never rounds to ±1 unless the fit really is perfect.
+function fmtR(r) {
+  if (!Number.isFinite(r)) return '–';
+  const a = Math.abs(r), sign = r < 0 ? MINUS : '';
+  if (a === 1) return sign + '1.00';
+  let d = 2, s = a.toFixed(d);
+  while (Number(s) >= 1 && d < 8) { d += 1; s = a.toFixed(d); }
+  return Number(s) === 0 ? '0.00' : sign + s;
+}
+const fmtR4 = (r) => { const s = Math.abs(r).toFixed(4); return (r < 0 && Number(s) !== 0 ? MINUS : '') + s; };
+function tickText(v, step) {
+  if (Math.abs(v) < step * 1e-9) return '0';
+  const a = Math.abs(v), sign = v < 0 ? MINUS : '';
+  if (step >= 1e9 || step < 1e-4) return sign + scientific(a, 3);
+  let d = 0;
+  while (d < 8 && Math.abs(Math.round(step * 10 ** d) - step * 10 ** d) > 1e-8 * 10 ** d * step) d += 1;
+  const s = a.toFixed(d);
+  return sign + (a >= 10000 ? group(s) : s);
+}
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* ===================================================================
+   State
+   =================================================================== */
+
+const $ = (id) => document.getElementById(id);
+const grid = $('grid');
+
+const S = {
+  table: null,       // the table on screen: {names, rows, x, y}. Cells are kept as typed.
+  mine: null,        // the student's own table, which is the only one saved
+  view: 'mine',      // 'mine', or the key of an example
+  undo: null,
+  undoTimer: 0,
+  opts: { errors: false, band: false, resid: false },
+  pts: [], issues: [], fit: { n: 0, hasLine: false, reason: 'few' },
+  active: null,      // the cell with keyboard focus
+  hover: null,       // the row under the pointer
+  hoverIn: null,     // which graph the pointer is over: 'plot' or 'resid'
+  shown: null,       // the axis ranges now on screen
+  geo: null,
+  rgeo: null,        // the residual graph's geometry and bar layout
+  raf: 0, queued: false, saveTimer: 0, liveTimer: 0, lastPointer: 'mouse',
+};
+
+const blankRow = (cols) => Array.from({ length: cols }, () => '');
+const blankTable = () => ({ names: ['Variable 1', 'Variable 2'], rows: Array.from({ length: MIN_ROWS }, () => blankRow(2)), x: 0, y: 1 });
+const copyTable = (t) => JSON.parse(JSON.stringify(t));
+const isBlankRow = (row) => row.every((v) => String(v).trim() === '');
+const isBlankTable = (t) => t.rows.every(isBlankRow);
+
+function fromExample(key) {
+  const e = EXAMPLES[key];
+  return padRows({ names: e.names.slice(), rows: e.rows.map((r) => r.map(String)), x: e.x ?? 0, y: e.y ?? 1 });
+}
+function padRows(t) {
+  const cols = t.names.length;
+  t.rows.forEach((row) => { while (row.length < cols) row.push(''); });
+  if (!t.rows.length || !isBlankRow(t.rows[t.rows.length - 1])) t.rows.push(blankRow(cols));
+  while (t.rows.length < MIN_ROWS) t.rows.push(blankRow(cols));
+  return t;
+}
+const displayName = (c, t = S.table) => t.names[c].trim() || 'Variable ' + (c + 1);
+
+function save() {
+  clearTimeout(S.saveTimer);
+  S.saveTimer = setTimeout(() => {
+    try {
+      const t = copyTable(S.mine);
+      while (t.rows.length && isBlankRow(t.rows[t.rows.length - 1])) t.rows.pop();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(t));
+    } catch (err) { /* private windows can refuse storage; the page still works */ }
+  }, 250);
+}
+function restore() {
+  try {
+    const t = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    const ok = t && Array.isArray(t.names) && t.names.length >= 2 && t.names.every((s) => typeof s === 'string')
+      && Array.isArray(t.rows) && t.rows.every((r) => Array.isArray(r) && r.every((v) => typeof v === 'string'))
+      && Number.isInteger(t.x) && Number.isInteger(t.y) && t.x !== t.y && t.x >= 0 && t.y >= 0 && t.x < t.names.length && t.y < t.names.length;
+    return ok ? padRows(t) : null;
+  } catch (err) { return null; }
+}
+
+function setUndo(msg, mine, view) {
+  S.undo = { msg, mine, view };
+  clearTimeout(S.undoTimer);
+  S.undoTimer = setTimeout(() => { S.undo = null; renderStatus(); }, 30000);
+}
+function doUndo() {
+  const u = S.undo;
+  S.undo = null; clearTimeout(S.undoTimer);
+  S.mine = u.mine;
+  if (u.view === 'mine') show(S.mine, 'mine'); else show(fromExample(u.view), u.view);
+}
+// Typing into an example turns it into the student's own table.
+function touchTable() {
+  if (S.view === 'mine') return;
+  if (!isBlankTable(S.mine)) setUndo('Your earlier table was replaced.', S.mine, S.view);
+  S.mine = S.table; S.view = 'mine';
+  syncDataset();
+}
+// For changes to the whole table: remember what was there, then make it the student's own.
+function beginBulkEdit(msg) {
+  setUndo(msg, copyTable(S.mine), S.view);
+  if (S.view !== 'mine') { S.mine = S.table; S.view = 'mine'; syncDataset(); }
+}
+
+function show(table, view) {
+  S.table = table; S.view = view;
+  padRows(table);
+  syncDataset(); renderGrid(); syncVarSelects();
+  $('tablebox').scrollTop = 0; $('tablebox').scrollLeft = 0;
+  update();
+}
+function syncDataset() {
+  $('dataset').value = S.view;
+  $('source').textContent = S.view === 'mine' ? '' : EXAMPLES[S.view].source;
+  // From an example, this button never wipes the student's own table.
+  $('clear').textContent = S.view !== 'mine' && !isBlankTable(S.mine) ? 'Back to your data' : 'Clear table';
+}
+
+/* ===================================================================
+   The data table
+   =================================================================== */
+
+const cellInput = (r, c) => grid.querySelector(`input[data-r="${r}"][data-c="${c}"]`);
+
+function rowHtml(r) {
+  const t = S.table;
+  let h = `<tr data-row="${r}"><th scope="row" class="num">${r + 1}</th>`;
+  t.names.forEach((_, c) => {
+    const unused = c !== t.x && c !== t.y ? ' class="unused"' : '';
+    h += `<td${unused}><input class="cell" data-r="${r}" data-c="${c}" value="${esc(t.rows[r][c] ?? '')}" size="6" inputmode="numeric" enterkeyhint="next" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Row ${r + 1}, ${esc(displayName(c))}"></td>`;
+  });
+  return h + '</tr>';
+}
+function renderGrid() {
+  const t = S.table;
+  let head = '<thead><tr><th scope="col" class="num"><span class="sr">Row</span></th>';
+  t.names.forEach((name, c) => {
+    const remove = t.names.length > 2
+      ? `<button type="button" class="rm" data-c="${c}" title="Remove this variable" aria-label="Remove ${esc(displayName(c))}">×</button>` : '';
+    head += `<th scope="col" class="var"><div class="varhead"><span class="role" data-role="${c}" aria-hidden="true">${c === t.x ? 'x' : c === t.y ? 'y' : ''}</span>`
+      + `<input class="name" data-r="-1" data-c="${c}" value="${esc(name)}" title="${esc(name)}" size="6" autocomplete="off" spellcheck="false" aria-label="Name of variable ${c + 1}">${remove}</div></th>`;
+  });
+  head += '</tr></thead>';
+  let body = '<tbody>';
+  for (let r = 0; r < t.rows.length; r++) body += rowHtml(r);
+  grid.innerHTML = head + body + '</tbody>';
+  grid.classList.toggle('many', t.names.length > 2);
+}
+function syncRoles() {
+  const t = S.table;
+  grid.querySelectorAll('.role').forEach((el) => {
+    const c = Number(el.dataset.role);
+    el.textContent = c === t.x ? 'x' : c === t.y ? 'y' : '';
+  });
+  grid.querySelectorAll('tbody td').forEach((td) => {
+    const c = Number(td.firstElementChild.dataset.c);
+    td.classList.toggle('unused', c !== t.x && c !== t.y);
+  });
+}
+function syncVarSelects() {
+  const t = S.table;
+  for (const [id, chosen] of [['xvar', t.x], ['yvar', t.y]]) {
+    const sel = $(id);
+    sel.replaceChildren(...t.names.map((_, c) => {
+      const o = document.createElement('option');
+      o.value = c; o.textContent = displayName(c);
+      return o;
+    }));
+    sel.value = chosen;
+  }
+}
+function chooseVariable(role, c) {
+  const t = S.table, other = role === 'x' ? 'y' : 'x';
+  if (t[other] === c) t[other] = t[role];     // picking the other role's variable swaps them
+  t[role] = c;
+  syncVarSelects(); syncRoles(); revealColumn(c); update();
+}
+// Scrolls the table sideways, and only sideways, to show the x and y columns if both fit, or else the one just chosen.
+function revealColumn(c) {
+  const t = S.table, box = $('tablebox'), rowNumbers = 34, slack = 4;
+  const edges = (k) => {
+    const r = cellInput(-1, k).closest('th').getBoundingClientRect();
+    const left = r.left - box.getBoundingClientRect().left - box.clientLeft + box.scrollLeft;
+    return [left, left + r.width];
+  };
+  const [xLeft, xRight] = edges(t.x), [yLeft, yRight] = edges(t.y);
+  const lo = Math.min(xLeft, yLeft), hi = Math.max(xRight, yRight);
+  const [left, right] = hi - lo <= box.clientWidth - rowNumbers + slack ? [lo, hi] : edges(c);
+  if (left < box.scrollLeft + rowNumbers) box.scrollLeft = left - rowNumbers;
+  else if (right > box.scrollLeft + box.clientWidth + slack) box.scrollLeft = Math.min(left - rowNumbers, right - box.clientWidth);
+}
+function flagBadCells() {
+  const t = S.table, focused = document.activeElement;
+  grid.querySelectorAll('tbody .cell').forEach((el) => {
+    const c = Number(el.dataset.c);
+    const bad = (c === t.x || c === t.y) && el !== focused && Number.isNaN(parseNum(el.value));
+    if (bad !== el.classList.contains('bad')) {
+      el.classList.toggle('bad', bad);
+      if (bad) el.setAttribute('aria-invalid', 'true'); else el.removeAttribute('aria-invalid');
+    }
+  });
+}
+function addRow() {
+  const t = S.table;
+  if (t.rows.length >= MAX_ROWS) return false;
+  t.rows.push(blankRow(t.names.length));
+  grid.tBodies[0].insertAdjacentHTML('beforeend', rowHtml(t.rows.length - 1));
+  return true;
+}
+function focusCell(r, c) {
+  const t = S.table;
+  if (c < 0 || c >= t.names.length || r < -1) return;
+  if (r >= t.rows.length && !addRow()) return;
+  const el = cellInput(r, c);
+  if (!el) return;
+  el.focus();
+  el.select();
+}
+
+grid.addEventListener('input', (e) => {
+  const el = e.target;
+  const r = Number(el.dataset.r), c = Number(el.dataset.c);
+  touchTable();
+  const t = S.table;
+  if (r < 0) {
+    t.names[c] = el.value;
+    el.title = el.value;
+    syncVarSelects();
+    grid.querySelectorAll(`tbody input[data-c="${c}"]`).forEach((inp) => inp.setAttribute('aria-label', `Row ${Number(inp.dataset.r) + 1}, ${displayName(c)}`));
+    const rm = grid.querySelector(`.rm[data-c="${c}"]`);
+    if (rm) rm.setAttribute('aria-label', 'Remove ' + displayName(c));
+  } else {
+    t.rows[r][c] = el.value;
+    if (r === t.rows.length - 1 && !isBlankRow(t.rows[r])) addRow();
+  }
+  queueUpdate();
+});
+
+grid.addEventListener('keydown', (e) => {
+  const el = e.target;
+  if (!el.matches('input')) return;
+  const r = Number(el.dataset.r), c = Number(el.dataset.c);
+  const atStart = el.selectionStart === 0 && el.selectionEnd === 0;
+  const atEnd = el.selectionStart === el.value.length && el.selectionEnd === el.value.length;
+  let to = null;
+  if (e.key === 'Enter') to = [r + (e.shiftKey ? -1 : 1), c];
+  else if (e.key === 'ArrowDown') to = [r + 1, c];
+  else if (e.key === 'ArrowUp') to = [r - 1, c];
+  else if (e.key === 'ArrowLeft' && atStart) to = [r, c - 1];
+  else if (e.key === 'ArrowRight' && atEnd) to = [r, c + 1];
+  if (to) { e.preventDefault(); focusCell(to[0], to[1]); }
+});
+
+grid.addEventListener('focusin', (e) => {
+  const el = e.target;
+  if (!el.matches('.cell, .name')) return;
+  const r = Number(el.dataset.r), c = Number(el.dataset.c);
+  S.active = r >= 0 ? { r, c } : null;
+  markActiveRow();
+  syncRing();
+  queueUpdate();    // a bad cell is not flagged while it is being typed in
+});
+grid.addEventListener('focusout', () => {
+  S.active = null;
+  markActiveRow();
+  syncRing();
+  queueUpdate();
+});
+function markActiveRow() {
+  grid.querySelectorAll('tr.active').forEach((tr) => tr.classList.remove('active'));
+  if (S.active) { const tr = grid.querySelector(`tr[data-row="${S.active.r}"]`); if (tr) tr.classList.add('active'); }
+}
+
+grid.addEventListener('click', (e) => {
+  const btn = e.target.closest('.rm');
+  if (btn) removeVariable(Number(btn.dataset.c));
+});
+
+function addVariable() {
+  touchTable();
+  const t = S.table;
+  let k = t.names.length + 1;
+  while (t.names.includes('Variable ' + k)) k += 1;
+  t.names.push('Variable ' + k);
+  t.rows.forEach((row) => row.push(''));
+  renderGrid(); syncVarSelects(); update();
+  const el = cellInput(-1, t.names.length - 1);
+  el.focus(); el.select();
+}
+function removeVariable(c) {
+  beginBulkEdit('Removed ' + displayName(c) + '.');
+  const t = S.table;
+  t.names.splice(c, 1);
+  t.rows.forEach((row) => row.splice(c, 1));
+  const shift = (i) => (i === c ? null : i > c ? i - 1 : i);
+  let x = shift(t.x), y = shift(t.y);
+  const firstOther = (o) => t.names.findIndex((_, i) => i !== o);
+  if (x === null) x = firstOther(y);
+  if (y === null) y = firstOther(x);
+  t.x = x; t.y = y;
+  renderGrid(); syncVarSelects(); update();
+}
+function clearTable() {
+  if (S.view === 'mine') {
+    setUndo('Table cleared.', copyTable(S.mine), 'mine');
+    S.mine = blankTable();
+  }
+  const wasBlank = isBlankTable(S.mine);
+  show(S.mine, 'mine');
+  if (wasBlank) focusCell(0, 0);
+}
+
+/* ---------- pasting from a spreadsheet ---------- */
+
+function splitDelimited(line, sep) {
+  const cells = []; let cur = '', quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i += 1; }
+      else if (ch === '"') quoted = false;
+      else cur += ch;
+    } else if (ch === '"' && cur.trim() === '') { quoted = true; cur = ''; }
+    else if (ch === sep) { cells.push(cur.trim()); cur = ''; }
+    else cur += ch;
+  }
+  cells.push(cur.trim());
+  return cells;
+}
+// Returns an array of rows, or null when the text is a single value and should paste normally.
+function parseClipboard(text) {
+  const lines = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '').split('\n');
+  const all = lines.join('\n');
+  let rows;
+  if (all.includes('\t')) rows = lines.map((l) => l.split('\t').map((s) => s.trim()));
+  else if (lines.length === 1) {
+    if (parseNum(lines[0]) !== null && !Number.isNaN(parseNum(lines[0]))) return null;   // one number, such as 1,200
+    const sep = lines[0].includes(',') ? ',' : lines[0].includes(';') ? ';' : null;
+    const cells = sep ? splitDelimited(lines[0], sep) : lines[0].trim().split(/\s+/);
+    if (cells.length < 2 || !cells.every((s) => Number.isFinite(parseNum(s)))) return null;   // a name, or ordinary text
+    rows = [cells];
+  }
+  else if (lines.some((l) => l.includes(','))) rows = lines.map((l) => splitDelimited(l, ','));
+  else if (lines.some((l) => l.includes(';'))) rows = lines.map((l) => splitDelimited(l, ';'));
+  else {
+    rows = lines.map((l) => l.trim().split(/\s+/));
+    const width = rows.length > 1 ? rows[1].length : rows[0].length;
+    if (rows[0].length !== width && rows[0].some((s) => !Number.isFinite(parseNum(s)))) rows.shift();   // names with spaces can't be split safely
+  }
+  return rows;
+}
+function applyPaste(rows, r, c) {
+  const hasNames = rows[0].some((s) => s !== '' && !Number.isFinite(parseNum(s)));
+  const atTop = r <= 0;
+  const names = hasNames && atTop && (rows.length > 1 || r < 0) ? rows[0] : null;
+  let values = names ? rows.slice(1) : rows;
+  let startRow = Math.max(r, 0);
+
+  const before = S.table;
+  const filledCols = before.names.filter((_, i) => before.rows.some((row) => String(row[i]).trim() !== '')).length;
+  const width = rows.reduce((w, row) => Math.max(w, row.length), 0);
+  const replaceAll = atTop && c === 0 && width >= filledCols;   // a new data set pasted at the top left replaces the old one
+
+  const dropped = Math.max(0, startRow + values.length - MAX_ROWS);
+  if (dropped) values = values.slice(0, MAX_ROWS - startRow);
+
+  beginBulkEdit(`Pasted ${values.length} ${values.length === 1 ? 'row' : 'rows'}` + (dropped ? `; the last ${dropped} didn’t fit (limit ${MAX_ROWS}).` : '.'));
+  if (replaceAll) {
+    S.mine = blankTable();
+    S.table = S.mine;
+    S.table.names = [];
+    S.table.rows = [];
+  }
+  const t = S.table;
+  while (t.names.length < Math.max(c + width, replaceAll ? 2 : 0)) {
+    let k = t.names.length + 1;
+    while (t.names.includes('Variable ' + k)) k += 1;
+    t.names.push('Variable ' + k);
+    t.rows.forEach((row) => row.push(''));
+  }
+  if (names) names.forEach((s, i) => { if (s !== '') t.names[c + i] = s; });
+  while (t.rows.length < startRow + values.length) t.rows.push(blankRow(t.names.length));
+  values.forEach((row, i) => row.forEach((s, j) => { t.rows[startRow + i][c + j] = s; }));
+  if (t.x >= t.names.length) t.x = 0;
+  if (t.y >= t.names.length || t.y === t.x) t.y = t.x === 0 ? 1 : 0;
+  show(t, 'mine');
+  const el = cellInput(startRow, c);
+  if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+}
+grid.addEventListener('paste', (e) => {
+  const el = e.target;
+  if (!el.matches('input')) return;
+  const rows = parseClipboard((e.clipboardData || window.clipboardData).getData('text'));
+  if (!rows || !rows.length) return;
+  e.preventDefault();
+  applyPaste(rows, Number(el.dataset.r), Number(el.dataset.c));
+});
+
+/* ===================================================================
+   From the table to the numbers on screen
+   =================================================================== */
+
+function collect() {
+  const t = S.table, pts = [], issues = [];
+  t.rows.forEach((row, i) => {
+    const sx = row[t.x] ?? '', sy = row[t.y] ?? '';
+    const vx = parseNum(sx), vy = parseNum(sy);
+    if (vx === null && vy === null) return;
+    if (Number.isFinite(vx) && Number.isFinite(vy)) { pts.push({ x: vx, y: vy, row: i }); return; }
+    if (S.active && S.active.r === i) return;     // still being typed
+    const badText = Number.isNaN(vx) ? sx : Number.isNaN(vy) ? sy : null;
+    if (badText !== null) {
+      const shown = badText.trim().length > 18 ? badText.trim().slice(0, 17) + '…' : badText.trim();
+      issues.push(`Row ${i + 1} left out: “${shown}” is not a number.`);
+    } else {
+      issues.push(`Row ${i + 1} left out: no ${vx === null ? 'x' : 'y'} value.`);
+    }
+  });
+  return { pts, issues };
+}
+
+function queueUpdate() {
+  if (S.queued) return;
+  S.queued = true;
+  requestAnimationFrame(() => { S.queued = false; update(); });
+}
+function update() {
+  const c = collect();
+  S.pts = c.pts; S.issues = c.issues;
+  S.fit = fit(S.pts);
+  flagBadCells();
+  renderReadout(); renderNote(); renderToggles(); renderCaptions(); renderDetails(); renderStatus();
+  renderResidCaptions(); renderResidTable();
+  drawPlot(false);
+  announce();
+  save();
+}
+
+function equationHtml(F) {
+  const mText = sig4(F.m);
+  const slope = mText.includes('×') ? `(${mText})` : mText;
+  const sign = F.b < 0 ? MINUS : '+';
+  return `<i>y</i> = ${slope}<i>x</i> ${sign} ${sig4(Math.abs(F.b))}`;
+}
+function renderReadout() {
+  const F = S.fit, eq = $('eq'), r = $('r');
+  eq.classList.toggle('empty', !F.hasLine);
+  eq.innerHTML = F.hasLine ? equationHtml(F) : '<i>y</i> = <i>m</i><i>x</i> + <i>b</i>';
+  r.classList.toggle('empty', !Number.isFinite(F.r));
+  r.innerHTML = `<i>r</i> = ${fmtR(F.r)}`;
+}
+function renderNote() {
+  const F = S.fit;
+  let t = '';
+  if (F.n === 1) t = 'One point so far. A line needs at least two.';
+  else if (F.reason === 'xflat') t = 'Every x value is the same, so the line would be vertical. A vertical line has no slope, so there is no equation and no r.';
+  else if (F.reason === 'huge') t = 'These numbers are too large to calculate with.';
+  else if (F.hasLine && F.yFlat) t = 'Every y value is the same, so the line is flat. r can’t be calculated because y never varies.';
+  else if (F.hasLine && F.n === 2) t = 'Two points always lie exactly on a line, so r is 1 or −1 whatever the numbers are.';
+  $('note').textContent = t;
+}
+function renderToggles() {
+  const can = S.fit.hasLine;
+  for (const [box, label] of [['opt-errors', 'errors-label'], ['opt-band', 'band-label']]) {
+    $(box).disabled = !can;
+    $(label).classList.toggle('off', !can);
+  }
+}
+function renderCaptions() {
+  const F = S.fit, box = $('captions');
+  const lines = [];
+  if (F.hasLine && S.opts.errors) {
+    lines.push(F.sse === 0
+      ? 'Every point is on the line, so every error is 0.'
+      : `Errors are actual y minus predicted y. Their squares add up to ${sig4(F.sse)}, the smallest total any straight line can get.`);
+  }
+  if (F.hasLine && S.opts.band) {
+    if (!Number.isFinite(F.sdErr)) lines.push(`The SD of the errors needs at least ${SD_DIVIDE_BY_N_MINUS + 1} points.`);
+    else if (F.sdErr === 0) lines.push('The SD of the errors is 0, so the dashed lines would sit right on the line.');
+    else {
+      const reach = BAND_SDS * F.sdErr;
+      const inside = S.pts.filter((p) => Math.abs(errorOf(F, p)) <= reach).length;
+      lines.push(`The dashed lines are ${BAND_SDS} SDs of the errors from the line (${BAND_SDS} × ${sig4(F.sdErr)} = ${sig4(reach)}). ${inside} of ${F.n} points (${Math.round(100 * inside / F.n)}%) fall between them.`);
+    }
+  }
+  box.replaceChildren(...lines.map((t) => { const p = document.createElement('p'); p.textContent = t; return p; }));
+}
+function renderDetails() {
+  const F = S.fit;
+  const v = (k) => (k === undefined ? '–' : sig4(k));
+  const rows = [
+    ['Rows plotted, n', String(F.n)],
+    ['r, to four decimal places', Number.isFinite(F.r) ? fmtR4(F.r) : '–'],
+    ['Mean of x', v(F.mx)], ['SD of x', v(F.sdx)],
+    ['Mean of y', v(F.my)], ['SD of y', v(F.sdy)],
+    ['Slope, m = r × SD of y ÷ SD of x', F.hasLine ? sig4(F.m) : '–'],
+    ['Intercept, b = mean of y − m × mean of x', F.hasLine ? sig4(F.b) : '–'],
+    ['Sum of squared errors', F.hasLine ? sig4(F.sse) : '–'],
+    [`SD of the errors = √(sum of squared errors ÷ (n − ${SD_DIVIDE_BY_N_MINUS}))`, F.hasLine ? sig4(F.sdErr) : '–'],
+  ];
+  $('details').replaceChildren(...rows.map(([k, val]) => {
+    const tr = document.createElement('tr'), th = document.createElement('th'), td = document.createElement('td');
+    th.scope = 'row'; th.textContent = k; td.textContent = val;
+    tr.append(th, td);
+    return tr;
+  }));
+}
+function renderStatus() {
+  const el = $('status'), n = S.pts.length;
+  // Rebuilt only when it changes, so keyboard focus on Undo isn't lost.
+  const signature = JSON.stringify([n, S.undo && S.undo.msg, S.issues]);
+  if (signature === el.dataset.signature) return;
+  el.dataset.signature = signature;
+  el.replaceChildren();
+  el.append(n === 0 ? 'No rows plotted yet.' : `${n} ${n === 1 ? 'row' : 'rows'} plotted.`);
+  if (S.undo) {
+    el.append(' ' + S.undo.msg);
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'undo'; b.textContent = 'Undo';
+    b.addEventListener('click', doUndo);
+    el.append(b);
+  }
+  const shown = S.issues.slice(0, 2);
+  if (S.issues.length > 2) shown.push(`${S.issues.length - 2} more ${S.issues.length === 3 ? 'row' : 'rows'} left out.`);
+  for (const t of shown) {
+    const w = document.createElement('span');
+    w.className = 'warn'; w.textContent = t;
+    el.append(w);
+  }
+}
+function summaryText() {
+  const F = S.fit;
+  if (!F.hasLine) return F.n === 0 ? 'No data plotted yet.' : `${F.n} ${F.n === 1 ? 'point' : 'points'} plotted, no line.`;
+  const eq = `y = ${sig4(F.m)} x ${F.b < 0 ? 'minus' : 'plus'} ${sig4(Math.abs(F.b))}`;
+  return `${F.n} points. Least-squares line: ${eq}. r = ${Number.isFinite(F.r) ? fmtR(F.r) : 'undefined'}.`;
+}
+function announce() {
+  clearTimeout(S.liveTimer);
+  S.liveTimer = setTimeout(() => {
+    const t = summaryText() + (S.issues.length ? ' ' + S.issues[0] : '');
+    if ($('live').textContent !== t) $('live').textContent = t;
+  }, 900);
+}
+
+/* ===================================================================
+   The plot
+   =================================================================== */
+
+function padRange(lo, hi) {
+  if (hi - lo <= Math.max(Math.abs(lo), Math.abs(hi)) * 1e-12) { const d = Math.abs(hi) * 0.1 || 1; return [lo - d, hi + d]; }
+  const d = (hi - lo) * 0.06;
+  return [lo - d, hi + d];
+}
+function extent(vals) {
+  let lo = Infinity, hi = -Infinity;
+  for (const v of vals) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  return [lo, hi];
+}
+// The y axis grows to fit the dashed lines only when they are on.
+function targetRanges() {
+  const F = S.fit;
+  const dx = padRange(...extent(S.pts.map((p) => p.x)));
+  const ys = S.pts.map((p) => p.y);
+  if (F.hasLine) {
+    const a = predict(F, dx[0]), c = predict(F, dx[1]);
+    ys.push(a, c);
+    if (S.opts.band && Number.isFinite(F.sdErr)) {
+      const reach = BAND_SDS * F.sdErr;
+      ys.push(a + reach, a - reach, c + reach, c - reach);
+    }
+  }
+  const dy = padRange(...extent(ys));
+  const usable = [...dx, ...dy, dx[1] - dx[0], dy[1] - dy[0]].every(Number.isFinite);
+  return usable ? { dx, dy, lim: residLimit() } : null;
+}
+// The residual graph is centred on 0. Like the scatterplot, it grows to fit the dashed lines when they are on.
+function residLimit() {
+  const F = S.fit;
+  if (!F.hasLine) return null;
+  let lim = 0;
+  for (const p of S.pts) lim = Math.max(lim, Math.abs(errorOf(F, p)));
+  if (S.opts.band && Number.isFinite(F.sdErr)) lim = Math.max(lim, BAND_SDS * F.sdErr);
+  if (!(lim > 0)) lim = (F.sdy > 0 ? F.sdy : Math.abs(F.my) || 1) * 0.5;   // every residual is 0
+  return Number.isFinite(lim) ? lim * 1.1 : null;
+}
+function niceStep(range, count) {
+  const raw = range / count, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+  return (f < 1.5 ? 1 : f < 2.25 ? 2 : f < 3.5 ? 2.5 : f < 7.5 ? 5 : 10) * p;
+}
+function makeTicks([lo, hi], count) {
+  const step = niceStep(hi - lo, count), vals = [], first = Math.ceil(lo / step - 1e-9);
+  // Counted, so that extreme numbers can never make this loop run forever.
+  for (let i = 0; i < 40; i++) {
+    const v = (first + i) * step;
+    if (v > hi + step * 1e-9) break;
+    if (!vals.length || v > vals[vals.length - 1]) vals.push(v);
+  }
+  return { step, vals };
+}
+function plotSize() {
+  const wrap = $('plot');
+  const W = Math.max(280, Math.round(wrap.clientWidth));
+  let H, RH = 0;
+  if (window.matchMedia('(min-width: 900px)').matches) {
+    const top = wrap.getBoundingClientRect().top + window.scrollY;
+    const room = window.innerHeight - top - 84;
+    if (S.opts.resid) {
+      // The two graphs share the screen, so a bar and its point can be seen together.
+      const share = room - residChrome();
+      H = Math.max(300, Math.min(W * 0.62, share * 0.6));
+      RH = Math.max(210, Math.min(W * 0.42, share * 0.4));
+    } else {
+      H = Math.max(340, Math.min(W * 0.78, room));
+    }
+  } else {
+    H = Math.max(280, Math.min(W * 0.82, 480));
+    if (S.opts.resid) RH = Math.max(200, Math.min(W * 0.6, 300));
+  }
+  return { W, H: Math.round(H), RH: Math.round(RH) };
+}
+// The height of the text between and below the two graphs, which has to fit on screen too.
+function residChrome() {
+  const plot = $('plot').getBoundingClientRect(), rplot = $('rplot').getBoundingClientRect();
+  const below = $('rcaptions').getBoundingClientRect().bottom - rplot.bottom;
+  return Math.max(0, rplot.top - plot.bottom) + Math.max(0, below) + 34;
+}
+function clipName(s, px) {
+  const max = Math.max(6, Math.floor(px / 7.4));
+  return s.length > max ? s.slice(0, max - 1) + '…' : s;
+}
+
+function drawPlot(animate) {
+  cancelAnimationFrame(S.raf);
+  const target = S.pts.length && S.fit.reason !== 'huge' ? targetRanges() : null;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (animate && target && S.shown && S.pts.length <= 1500 && !reduced) {
+    const from = S.shown.dy, fromLim = S.shown.lim, t0 = performance.now();
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / 280), e = 1 - Math.pow(1 - k, 3);
+      const lim = target.lim && fromLim ? fromLim + (target.lim - fromLim) * e : target.lim;
+      paint({ dx: target.dx, dy: [from[0] + (target.dy[0] - from[0]) * e, from[1] + (target.dy[1] - from[1]) * e], lim });
+      if (k < 1) S.raf = requestAnimationFrame(step);
+    };
+    S.raf = requestAnimationFrame(step);
+  } else paint(target);
+}
+
+function paint(ranges) {
+  const svg = $('svg'), { W, H, RH } = plotSize(), F = S.fit, t = S.table;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  S.shown = ranges;
+  if (!ranges) {
+    S.geo = null;
+    const message = S.pts.length ? 'These numbers are too large to plot.' : 'Type at least two rows of numbers to draw the line.';
+    svg.setAttribute('aria-label', 'Empty plot. ' + message);
+    svg.innerHTML = `<text class="msg" x="${W / 2}" y="${H / 2}">${message}</text>`;
+    if (S.opts.resid) paintResid(null, W, RH);
+    syncRing();
+    return;
+  }
+  const { dx, dy } = ranges;
+  const tx = makeTicks(dx, W < 520 ? 5 : 8), ty = makeTicks(dy, 6);
+  const yLabels = ty.vals.map((v) => tickText(v, ty.step));
+  // The residual graph shares the scatterplot's left edge and x scale, so each bar can sit under its point.
+  const rt = S.opts.resid && ranges.lim ? makeTicks([-ranges.lim, ranges.lim], RH < 260 ? 4 : 6) : null;
+  const rLabels = rt ? rt.vals.map((v) => tickText(v, rt.step)) : [];
+  const L = Math.max(46, Math.max(...yLabels.map((s) => s.length), ...rLabels.map((s) => s.length)) * 7.4 + 14), R = 20, T = 30, B = 50;
+  const X = (v) => L + (v - dx[0]) / (dx[1] - dx[0]) * (W - L - R);
+  const Y = (v) => H - B - (v - dy[0]) / (dy[1] - dy[0]) * (H - T - B);
+  S.geo = { W, H, L, R, T, B, X, Y };
+  const f1 = (v) => v.toFixed(1);
+  const n = S.pts.length, dense = n > 150, rad = dense ? 3.6 : n > 40 ? 4.6 : 6;
+
+  let s = '';
+  tx.vals.forEach((v) => { s += `<line class="gl" x1="${f1(X(v))}" x2="${f1(X(v))}" y1="${T}" y2="${H - B}"/>`; });
+  ty.vals.forEach((v) => { s += `<line class="gl" x1="${L}" x2="${W - R}" y1="${f1(Y(v))}" y2="${f1(Y(v))}"/>`; });
+  s += `<path class="ax" d="M${L} ${T}V${H - B}H${W - R}"/>`;
+  tx.vals.forEach((v) => { s += `<text class="tk" text-anchor="middle" x="${f1(X(v))}" y="${H - B + 18}">${tickText(v, tx.step)}</text>`; });
+  ty.vals.forEach((v, i) => { s += `<text class="tk" text-anchor="end" x="${L - 8}" y="${f1(Y(v) + 4)}">${yLabels[i]}</text>`; });
+  s += `<text class="at" text-anchor="middle" x="${(L + W - R) / 2}" y="${H - 11}">${esc(clipName(displayName(t.x), W - L - R))}</text>`;
+  s += `<text class="at" x="${L}" y="${T - 13}">${esc(clipName(displayName(t.y), W - L - R))}</text>`;
+
+  s += `<clipPath id="plot-area"><rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/></clipPath>`;
+  s += `<g class="${dense ? 'dense' : ''}">`;
+  if (F.hasLine) {
+    const lineY0 = predict(F, dx[0]), lineY1 = predict(F, dx[1]);
+    s += '<g clip-path="url(#plot-area)">';
+    if (S.opts.band && F.sdErr > 0) {
+      const reach = BAND_SDS * F.sdErr;
+      for (const sign of [1, -1]) {
+        s += `<line class="band" data-band="${sign}" x1="${f1(X(dx[0]))}" y1="${f1(Y(lineY0 + sign * reach))}" x2="${f1(X(dx[1]))}" y2="${f1(Y(lineY1 + sign * reach))}"/>`;
+      }
+    }
+    if (S.opts.errors && F.sse > 0) {
+      S.pts.forEach((p) => {
+        s += `<line class="err" data-row="${p.row}" x1="${f1(X(p.x))}" x2="${f1(X(p.x))}" y1="${f1(Y(p.y))}" y2="${f1(Y(predict(F, p.x)))}"/>`;
+      });
+    }
+    s += `<line class="reg" x1="${f1(X(dx[0]))}" y1="${f1(Y(lineY0))}" x2="${f1(X(dx[1]))}" y2="${f1(Y(lineY1))}"/>`;
+    s += '</g>';
+  }
+  S.pts.forEach((p) => { s += `<circle class="pt" data-row="${p.row}" cx="${f1(X(p.x))}" cy="${f1(Y(p.y))}" r="${rad}"/>`; });
+  if (F.hasLine && S.opts.band && F.sdErr > 0) {
+    // Each label sits clear of its dashed line, allowing for how far the line climbs under the label.
+    const reach = BAND_SDS * F.sdErr, end = predict(F, dx[1]), right = W - R - 4, labelWidth = 46;
+    const climb = Math.abs(Y(predict(F, dx[1])) - Y(predict(F, dx[0]))) / (X(dx[1]) - X(dx[0])) * labelWidth;
+    const above = Y(end + reach) - 7 - (F.m < 0 ? climb : 0);
+    let below = Y(end - reach) + 16 + (F.m > 0 ? climb : 0);
+    if (below > H - B - 3) below = Y(end - reach) - 7 - climb;
+    s += `<text class="bl" text-anchor="end" x="${right}" y="${f1(above)}">+${BAND_SDS} SD</text>`;
+    s += `<text class="bl" text-anchor="end" x="${right}" y="${f1(below)}">${MINUS}${BAND_SDS} SD</text>`;
+  }
+  s += '</g>';
+  s += `<circle class="ring" id="ring" r="${rad + 4}" visibility="hidden"/>`;
+  svg.innerHTML = s;
+  const names = `${displayName(t.y)} against ${displayName(t.x)}`;
+  svg.setAttribute('aria-label', `Scatterplot of ${names}. ${summaryText()}`);
+  if (S.opts.resid) paintResid(rt && { L, R, X, tx, lim: ranges.lim, rt, rLabels }, W, RH);
+  syncRing();
+}
+
+/* ---------- the residual graph ---------- */
+
+// The non-decreasing list of numbers closest to d, in the least-squares sense (pool adjacent violators).
+function isotonic(d) {
+  const val = [], wt = [];
+  for (const v of d) {
+    val.push(v); wt.push(1);
+    while (val.length > 1 && val[val.length - 2] > val[val.length - 1]) {
+      const v2 = val.pop(), w2 = wt.pop(), k = val.length - 1;
+      val[k] = (val[k] * wt[k] + v2 * w2) / (wt[k] + w2);
+      wt[k] += w2;
+    }
+  }
+  const out = [];
+  val.forEach((v, k) => { for (let j = 0; j < wt[k]; j++) out.push(v); });
+  return out;
+}
+// One bar per point, in order of x (and of row, for equal x). Each bar sits under its point when there is room.
+// Where points crowd together, the bars spread apart just enough for every one to show, moving as little as possible.
+function barLayout(X, left, right) {
+  const F = S.fit;
+  const order = S.pts.slice().sort((a, b) => a.x - b.x || a.row - b.row);
+  const n = order.length, want = order.map((p) => X(p.x));
+  // Bars for equal x values stand side by side, centred under their shared x.
+  const offset = new Array(n), groups = [];
+  for (let i = 0; i < n;) {
+    let k = i;
+    while (k + 1 < n && order[k + 1].x === order[i].x) k += 1;
+    for (let j = i; j <= k; j++) offset[j] = j - (i + k) / 2;
+    groups.push({ x: order[i].x, a: i, b: k });
+    i = k + 1;
+  }
+  const widthFor = (s) => (s >= 26 ? 24 : s - (s >= 8 ? 2 : s >= 3 ? 1 : s * 0.25));
+  const place = (s) => {
+    const w = widthFor(s), lo = left + w / 2, hi = Math.max(lo, right - w / 2 - (n - 1) * s);
+    const pos = isotonic(want.map((c, i) => c - i * s)).map((q, i) => Math.min(Math.max(q, lo), hi) + i * s);
+    let moved = 0;
+    pos.forEach((c, i) => { moved = Math.max(moved, Math.abs(c - want[i] - offset[i] * s)); });
+    return { s, w, pos, moved };
+  };
+  // The widest bars that still sit within a few pixels of their points. Crowded data can't manage that,
+  // so there every bar gets an even share of the width.
+  const TOL = 6, sMax = Math.min(26, 0.85 * (right - left) / n), sMin = Math.min(sMax, 5);
+  let best = place(sMax);
+  if (best.moved > TOL && sMin < sMax) {
+    let lo = place(sMin), hiS = sMax;
+    if (lo.moved <= TOL) {
+      for (let k = 0; k < 18; k++) {
+        const mid = place((lo.s + hiS) / 2);
+        if (mid.moved <= TOL) lo = mid; else hiS = mid.s;
+      }
+    }
+    best = lo;
+  }
+  const slot = new Map(order.map((p, i) => [p.row, i]));
+  return { order, want, slot, groups, ...best, res: order.map((p) => errorOf(F, p)) };
+}
+// Where an x value falls among the bars. A tick close to a group of bars goes with that group. Any other tick
+// keeps the scatterplot's spacing, unless that would put it on the wrong side of a bar.
+function barAxis(lay, X, step) {
+  const { pos, w, groups } = lay, m = groups.length;
+  return (v) => {
+    let a = 0, b = m;
+    while (a < b) { const k = (a + b) >> 1; if (groups[k].x < v) a = k + 1; else b = k; }
+    let g = null;
+    for (const c of [groups[a - 1], groups[a]]) if (c && (!g || Math.abs(c.x - v) < Math.abs(g.x - v))) g = c;
+    if (g && Math.abs(g.x - v) <= 0.25 * step) return (pos[g.a] + pos[g.b]) / 2 + X(v) - X(g.x);
+    const lo = a > 0 ? pos[groups[a - 1].b] + w / 2 : -Infinity, hi = a < m ? pos[groups[a].a] - w / 2 : Infinity;
+    return lo <= hi ? Math.min(Math.max(X(v), lo), hi) : (lo + hi) / 2;
+  };
+}
+function paintResid(g, W, H) {
+  const svg = $('rsvg'), F = S.fit, t = S.table;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  if (!g || !F.hasLine) {
+    S.rgeo = null;
+    const message = F.reason === 'xflat' ? 'Every x value is the same, so there is no line and no residuals.'
+      : F.reason === 'huge' ? 'These numbers are too large to plot.' : 'Type at least two rows of numbers to see the residuals.';
+    svg.setAttribute('aria-label', 'Empty residual graph. ' + message);
+    svg.innerHTML = `<text class="msg" x="${W / 2}" y="${H / 2}">${message}</text>`;
+    return;
+  }
+  const { L, R, X, tx, lim, rt, rLabels } = g, T = 28, B = 46;
+  const lay = barLayout(X, L, W - R), XA = barAxis(lay, X, tx.step);
+  const Y = (v) => T + (lim - v) / (2 * lim) * (H - T - B);
+  S.rgeo = { W, H, L, R, T, B, Y, lay };
+  const f1 = (v) => v.toFixed(1), fx = lay.w < 3 ? (v) => v.toFixed(2) : f1;
+
+  let s = '', labels = '', lastLabel = -Infinity;
+  for (const v of tx.vals) {
+    const px = XA(v);
+    if (!(px >= L - 0.5 && px <= W - R + 0.5)) continue;
+    s += `<line class="gl" x1="${f1(px)}" x2="${f1(px)}" y1="${T}" y2="${H - B}"/>`;
+    if (px - lastLabel >= 40) { labels += `<text class="tk" text-anchor="middle" x="${f1(px)}" y="${H - B + 18}">${tickText(v, tx.step)}</text>`; lastLabel = px; }
+  }
+  rt.vals.forEach((v) => { s += `<line class="gl" x1="${L}" x2="${W - R}" y1="${f1(Y(v))}" y2="${f1(Y(v))}"/>`; });
+  s += `<path class="ax" d="M${L} ${T}V${H - B}H${W - R}"/>` + labels;
+  rt.vals.forEach((v, i) => { s += `<text class="tk" text-anchor="end" x="${L - 8}" y="${f1(Y(v) + 4)}">${rLabels[i]}</text>`; });
+  s += `<text class="at" text-anchor="middle" x="${(L + W - R) / 2}" y="${H - 9}">${esc(clipName(displayName(t.x), W - L - R))}</text>`;
+  s += `<text class="at" x="${L}" y="${T - 12}">${esc(clipName('Residual of ' + displayName(t.y), W - L - R))}</text>`;
+
+  // Bars grow from 0, with rounded ends when they are wide enough to show it.
+  const y0 = Y(0), w = lay.w, round = w >= 6 ? 4 : 0;
+  if (F.sse > 0) {
+    lay.order.forEach((p, i) => {
+      const e = lay.res[i], yt = Y(e), h = Math.abs(yt - y0);
+      if (h < 0.05) return;
+      const x0 = lay.pos[i] - w / 2, x1 = x0 + w, r = Math.min(round, h);
+      if (r === 0) { s += `<rect class="bar" data-row="${p.row}" x="${fx(x0)}" y="${f1(Math.min(yt, y0))}" width="${fx(w)}" height="${f1(h)}"/>`; return; }
+      const d = e > 0
+        ? `M${f1(x0)} ${f1(y0)}V${f1(yt + r)}A${r} ${r} 0 0 1 ${f1(x0 + r)} ${f1(yt)}H${f1(x1 - r)}A${r} ${r} 0 0 1 ${f1(x1)} ${f1(yt + r)}V${f1(y0)}Z`
+        : `M${f1(x0)} ${f1(y0)}V${f1(yt - r)}A${r} ${r} 0 0 0 ${f1(x0 + r)} ${f1(yt)}H${f1(x1 - r)}A${r} ${r} 0 0 0 ${f1(x1)} ${f1(yt - r)}V${f1(y0)}Z`;
+      s += `<path class="bar" data-row="${p.row}" d="${d}"/>`;
+    });
+  }
+  if (S.opts.band && F.sdErr > 0) {
+    const reach = BAND_SDS * F.sdErr;
+    for (const sign of [1, -1]) s += `<line class="band" x1="${L}" x2="${W - R}" y1="${f1(Y(sign * reach))}" y2="${f1(Y(sign * reach))}"/>`;
+  }
+  // The line from the scatterplot, laid flat.
+  s += `<line class="zero" x1="${L}" x2="${W - R}" y1="${f1(y0)}" y2="${f1(y0)}"/>`;
+  if (S.opts.band && F.sdErr > 0) {
+    const reach = BAND_SDS * F.sdErr, right = W - R - 4;
+    let below = Y(-reach) + 16;
+    if (below > H - B - 3) below = Y(-reach) - 7;
+    s += `<text class="bl" text-anchor="end" x="${right}" y="${f1(Y(reach) - 7)}">+${BAND_SDS} SD</text>`;
+    s += `<text class="bl" text-anchor="end" x="${right}" y="${f1(below)}">${MINUS}${BAND_SDS} SD</text>`;
+  }
+  s += '<rect class="barring" id="rring" visibility="hidden" x="0" y="0" width="0" height="0" rx="3"/>';
+  svg.innerHTML = s;
+  svg.setAttribute('aria-label', residSummary(lay));
+}
+function residSummary(lay) {
+  const F = S.fit, t = S.table;
+  const head = `Bar graph of the residuals of ${displayName(t.y)}, in order of ${displayName(t.x)}.`;
+  if (F.sse === 0) return `${head} Every residual is 0.`;
+  const c = residCounts();
+  let hi = 0, lo = 0;
+  lay.res.forEach((e, i) => { if (e > lay.res[hi]) hi = i; if (e < lay.res[lo]) lo = i; });
+  return `${head} ${F.n} bars, ${c.up} above 0 and ${c.down} below. The largest residual is +${sig4(lay.res[hi])} in row ${lay.order[hi].row + 1}, and the most negative is ${sig4(lay.res[lo])} in row ${lay.order[lo].row + 1}.`;
+}
+function residCounts() {
+  const F = S.fit, tol = 1e-9 * (F.sdy || 1);
+  let up = 0, down = 0;
+  for (const p of S.pts) { const e = errorOf(F, p); if (e > tol) up += 1; else if (e < -tol) down += 1; }
+  return { up, down, zero: S.pts.length - up - down };
+}
+// Streaks are runs of bars on the same side of 0, read left to right. A random order of the same bars
+// would make 1 + 2 × (bars above) × (bars below) ÷ (all bars) streaks on average.
+function residStreaks() {
+  const F = S.fit, tol = 1e-9 * (F.sdy || 1);
+  const order = S.pts.slice().sort((a, b) => a.x - b.x || a.row - b.row);
+  for (let i = 1; i < order.length; i++) if (order[i].x === order[i - 1].x) return null;   // equal x values have no left-to-right order
+  const signs = [];
+  for (const p of order) { const e = errorOf(F, p); if (e > tol) signs.push(1); else if (e < -tol) signs.push(-1); }
+  const n = signs.length, up = signs.filter((v) => v > 0).length, down = n - up;
+  if (n < 6 || !up || !down) return null;
+  let runs = 1;
+  for (let i = 1; i < n; i++) if (signs[i] !== signs[i - 1]) runs += 1;
+  return { runs, expected: 1 + 2 * up * down / n };
+}
+function renderResidCaptions() {
+  const F = S.fit, box = $('rcaptions'), lines = [];
+  if (S.opts.resid && F.hasLine) {
+    if (F.sse === 0) lines.push('Every point is on the line, so every residual is 0.');
+    else {
+      const c = residCounts(), verb = (k) => (k === 1 ? 'is' : 'are');
+      const zero = c.zero ? `, and ${c.zero} ${verb(c.zero)} exactly 0` : '';
+      lines.push(`Of the ${F.n} residuals, ${c.up} ${verb(c.up)} above 0 and ${c.down} ${verb(c.down)} below${zero}. They add up to 0, as the residuals from a least-squares line always do.`);
+      const st = residStreaks();
+      if (st) lines.push(`Reading left to right, the bars form ${st.runs} ${st.runs === 1 ? 'streak' : 'streaks'} above or below 0. Shuffled into a random order, the same bars would form about ${Math.round(st.expected)}.`);
+      if (S.opts.band && F.sdErr > 0) {
+        const reach = BAND_SDS * F.sdErr;
+        let over = 0, under = 0;
+        for (const p of S.pts) { const e = errorOf(F, p); if (e > reach) over += 1; else if (e < -reach) under += 1; }
+        const first = over === 0 ? 'No bars go' : over === 1 ? '1 bar goes' : `${over} bars go`;
+        const second = under === 0 ? 'none go' : under === 1 ? '1 goes' : `${under} go`;
+        lines.push(over + under === 0 ? 'Every bar stays between the dashed lines.' : `${first} past the top dashed line, and ${second} past the bottom one.`);
+      }
+    }
+  }
+  box.replaceChildren(...lines.map((text) => { const p = document.createElement('p'); p.textContent = text; return p; }));
+}
+const RTABLE_MAX = 1000;
+// The table view of the residual graph, built only while it is open.
+function renderResidTable() {
+  const box = $('rmore'), table = $('rtable'), F = S.fit, t = S.table;
+  if (!box.open || !S.opts.resid) return;
+  const cell = (tag, text) => { const c = document.createElement(tag); c.textContent = text; return c; };
+  const head = document.createElement('tr');
+  for (const h of ['Row', displayName(t.x), displayName(t.y), 'Predicted', 'Residual']) { const th = cell('th', h); th.scope = 'col'; head.append(th); }
+  const rows = [head];
+  if (F.hasLine) {
+    const plain = (v) => String(v).replace('-', MINUS);
+    for (const p of S.pts.slice(0, RTABLE_MAX)) {
+      const e = errorOf(F, p), tr = document.createElement('tr');
+      tr.append(cell('td', String(p.row + 1)), cell('td', plain(p.x)), cell('td', plain(p.y)), cell('td', sig4(predict(F, p.x))), cell('td', (e > 0 ? '+' : '') + sig4(e)));
+      rows.push(tr);
+    }
+  }
+  table.replaceChildren(...rows);
+  if (F.hasLine && S.pts.length > RTABLE_MAX) {
+    const cap = document.createElement('caption');
+    cap.className = 'rnote'; cap.style.captionSide = 'bottom'; cap.style.textAlign = 'left';
+    cap.textContent = `Showing the first ${RTABLE_MAX} of ${S.pts.length} points.`;
+    table.append(cap);
+  }
+}
+
+/* ---------- reading one point ---------- */
+
+// The point under the pointer, or with keyboard focus, is ringed on the scatterplot and outlined on the
+// residual graph. Its details show beside whichever graph the pointer is over.
+function syncRing() {
+  const row = S.hover !== null ? S.hover : S.active ? S.active.r : null;
+  const p = row === null ? null : S.pts.find((q) => q.row === row);
+  const ring = $('ring'), rring = $('rring');
+  const onPlot = !!(p && S.geo), onResid = !!(p && S.rgeo && S.opts.resid);
+  if (ring) {
+    if (onPlot) { ring.setAttribute('cx', S.geo.X(p.x)); ring.setAttribute('cy', S.geo.Y(p.y)); ring.setAttribute('visibility', 'visible'); }
+    else ring.setAttribute('visibility', 'hidden');
+  }
+  if (rring) {
+    if (onResid) {
+      const g = S.rgeo, i = g.lay.slot.get(p.row), y0 = g.Y(0), yt = g.Y(g.lay.res[i]);
+      const w = Math.max(g.lay.w, 4) + 6;
+      rring.setAttribute('x', (g.lay.pos[i] - w / 2).toFixed(1));
+      rring.setAttribute('y', (Math.min(y0, yt) - 3).toFixed(1));
+      rring.setAttribute('width', w.toFixed(1));
+      rring.setAttribute('height', (Math.abs(yt - y0) + 6).toFixed(1));
+      rring.setAttribute('visibility', 'visible');
+    } else rring.setAttribute('visibility', 'hidden');
+  }
+  if (S.hover !== null && S.hoverIn === 'resid' && onResid) { $('tip').hidden = true; showTip(p, 'resid'); }
+  else {
+    $('rtip').hidden = true;
+    if (onPlot) showTip(p, 'plot'); else $('tip').hidden = true;
+  }
+}
+function showTip(p, where) {
+  const resid = where === 'resid', F = S.fit, g = resid ? S.rgeo : S.geo;
+  const tip = $(resid ? 'rtip' : 'tip');
+  const line = (text, cls) => { const d = document.createElement('div'); d.textContent = text; if (cls) d.className = cls; return d; };
+  const plain = (v) => String(v).replace('-', MINUS);
+  const xy = `x = ${plain(p.x)}, y = ${plain(p.y)}`;
+  let parts, cx, cy;
+  if (resid) {
+    const i = g.lay.slot.get(p.row), e = g.lay.res[i];
+    cx = g.lay.pos[i]; cy = g.Y(e);
+    parts = [line(`Residual: ${e > 0 ? '+' : ''}${sig4(e)}`, 'v'), line(xy), line(`The line predicts ${sig4(predict(F, p.x))}`), line(`Row ${p.row + 1}`, 'k')];
+  } else {
+    cx = g.X(p.x); cy = g.Y(p.y);
+    parts = [line(xy, 'v'), line(`Row ${p.row + 1}`, 'k')];
+    if (F.hasLine && (S.opts.errors || S.opts.resid)) {
+      const e = errorOf(F, p);
+      parts.splice(1, 0, line(`The line predicts ${sig4(predict(F, p.x))}`), line(`${S.opts.resid ? 'Residual' : 'Error'}: ${e > 0 ? '+' : ''}${sig4(e)}`));
+    }
+  }
+  tip.replaceChildren(...parts);
+  tip.hidden = false;
+  const scale = $(resid ? 'rsvg' : 'svg').getBoundingClientRect().width / g.W || 1;
+  const tw = tip.offsetWidth, th = tip.offsetHeight, W = g.W * scale;
+  let left = cx * scale + 12, top = cy * scale - th - 10;
+  if (left + tw > W) left = cx * scale - 12 - tw;
+  if (left < 0) left = 0;
+  if (top < 0) top = cy * scale + 12;
+  tip.style.left = left + 'px'; tip.style.top = top + 'px';
+}
+function nearestRow(e) {
+  if (!S.geo || !S.pts.length) return null;
+  const rc = $('svg').getBoundingClientRect(), k = S.geo.W / rc.width;
+  const px = (e.clientX - rc.left) * k, py = (e.clientY - rc.top) * k;
+  let best = null, bestD = 24 * 24;
+  for (const p of S.pts) {
+    const dx = S.geo.X(p.x) - px, dy = S.geo.Y(p.y) - py, d = dx * dx + dy * dy;
+    if (d <= bestD) { bestD = d; best = p.row; }
+  }
+  return best;
+}
+// On the residual graph the pointer only has to be closest to a bar's column, not on the bar itself.
+function nearestBar(e) {
+  const g = S.rgeo;
+  if (!g || !g.lay.order.length) return null;
+  const rc = $('rsvg').getBoundingClientRect(), k = g.W / rc.width;
+  const px = (e.clientX - rc.left) * k, pos = g.lay.pos;
+  let a = 0, b = pos.length - 1;
+  while (b - a > 1) { const m = (a + b) >> 1; if (pos[m] < px) a = m; else b = m; }
+  const i = Math.abs(pos[a] - px) <= Math.abs(pos[b] - px) ? a : b;
+  return Math.abs(pos[i] - px) <= Math.max(12, g.lay.s / 2 + 2) ? g.lay.order[i].row : null;
+}
+const plotEl = $('plot'), rplotEl = $('rplot');
+for (const [el, find, name] of [[plotEl, nearestRow, 'plot'], [rplotEl, nearestBar, 'resid']]) {
+  el.addEventListener('pointermove', (e) => {
+    const row = find(e);
+    if (row !== S.hover || (row !== null && S.hoverIn !== name)) { S.hover = row; S.hoverIn = row === null ? null : name; syncRing(); }
+    el.style.cursor = row !== null && e.pointerType === 'mouse' ? 'pointer' : '';
+  });
+  el.addEventListener('pointerdown', (e) => {
+    S.lastPointer = e.pointerType;
+    S.hover = find(e); S.hoverIn = S.hover === null ? null : name; syncRing();
+  });
+  // A finger "leaves" as soon as it lifts, so a tapped point stays shown until the next tap elsewhere.
+  el.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') { S.hover = null; S.hoverIn = null; syncRing(); } });
+  el.addEventListener('pointercancel', () => { S.hover = null; S.hoverIn = null; syncRing(); });
+  el.addEventListener('click', () => {
+    if (S.lastPointer === 'mouse' && S.hover !== null) focusCell(S.hover, S.table.x);   // jump to this point's row
+  });
+}
+document.addEventListener('pointerdown', (e) => {
+  if (S.hover !== null && !plotEl.contains(e.target) && !rplotEl.contains(e.target)) { S.hover = null; S.hoverIn = null; syncRing(); }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('tip').hidden = true; $('rtip').hidden = true; } });
+
+/* ===================================================================
+   Start up
+   =================================================================== */
+
+(function start() {
+  $('band-name').textContent = BAND_SDS + ' SD lines';
+  const dataset = $('dataset');
+  let options = '<option value="mine">Your data</option>';
+  for (const [group, heading] of Object.entries(EXAMPLE_GROUPS)) {
+    const items = Object.entries(EXAMPLES).filter(([, e]) => (e.group || 'examples') === group);
+    if (items.length) options += `<optgroup label="${esc(heading)}">` + items.map(([key, e]) => `<option value="${key}">${esc(e.label)}</option>`).join('') + '</optgroup>';
+  }
+  dataset.innerHTML = options;
+
+  dataset.addEventListener('change', () => {
+    const v = dataset.value;
+    S.undo = null; clearTimeout(S.undoTimer);   // an Undo left over from another table would only confuse
+    if (v === 'mine') show(S.mine, 'mine'); else show(fromExample(v), v);
+  });
+  $('xvar').addEventListener('change', (e) => chooseVariable('x', Number(e.target.value)));
+  $('yvar').addEventListener('change', (e) => chooseVariable('y', Number(e.target.value)));
+  $('addvar').addEventListener('click', addVariable);
+  $('clear').addEventListener('click', clearTable);
+
+  // The options start off on every visit, apart from the residual graph when SHOW_RESIDUALS_AT_START is true.
+  const errors = $('opt-errors'), band = $('opt-band'), resid = $('opt-resid');
+  errors.checked = false; band.checked = false; resid.checked = SHOW_RESIDUALS_AT_START;
+  S.opts.resid = resid.checked; $('resid').hidden = !S.opts.resid;
+  errors.addEventListener('change', () => { S.opts.errors = errors.checked; renderCaptions(); drawPlot(false); });
+  band.addEventListener('change', () => { S.opts.band = band.checked; renderCaptions(); renderResidCaptions(); drawPlot(true); });
+  resid.addEventListener('change', () => {
+    S.opts.resid = resid.checked;
+    $('resid').hidden = !S.opts.resid;
+    if (!S.opts.resid) { S.rgeo = null; if (S.hoverIn === 'resid') { S.hover = null; S.hoverIn = null; } }
+    renderResidCaptions(); renderResidTable(); drawPlot(false);
+  });
+  $('rmore').addEventListener('toggle', renderResidTable);
+
+  let lastSize = '';
+  const repaintIfResized = () => {
+    const size = $('plot').clientWidth + 'x' + window.innerHeight;
+    if (size !== lastSize) { lastSize = size; drawPlot(false); }
+  };
+  new ResizeObserver(() => requestAnimationFrame(repaintIfResized)).observe($('plot'));
+  window.addEventListener('resize', () => requestAnimationFrame(repaintIfResized));
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => drawPlot(false));   // the fonts can move the plot's top edge
+
+  const saved = restore();
+  S.mine = saved || blankTable();
+  if (saved && !isBlankTable(saved)) show(S.mine, 'mine');
+  else show(fromExample('penguins10'), 'penguins10');
+})();
+</script>
+</body>
+</html>
